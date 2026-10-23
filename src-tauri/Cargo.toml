@@ -1,6 +1,6 @@
 [package]
 name = "moonraker-bar"
-version = "0.1.1"
+version = "0.2.0"
 description = "Native-feeling menu bar / tray monitor and controller for Klipper printers via Moonraker"
 authors = ["Modship"]
 license = "MIT"
