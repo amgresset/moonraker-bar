@@ -98,7 +98,8 @@ pub async fn set_active_printer(mgr: Mgr<'_>, id: Option<String>) -> Result<(), 
     Ok(())
 }
 
-/// `action`: `pause` | `resume` | `cancel` | `estop` | `firmware_restart` | `speed` (arg = percent) | `gcode` (arg = script)
+/// `action`: `pause` | `resume` | `cancel` | `estop` | `firmware_restart` | `speed` (arg = percent)
+/// | `gcode` (arg = script) | `preset` (arg = preset id) | `cooldown` | `reload_presets`
 #[tauri::command]
 pub async fn printer_action(
     mgr: Mgr<'_>,
@@ -126,6 +127,9 @@ pub async fn printer_action(
             }
             Action::Gcode(script)
         }
+        "preset" => Action::ApplyPreset(arg.unwrap_or_default()),
+        "cooldown" => Action::Cooldown,
+        "reload_presets" => Action::ReloadPresets,
         other => return Err(format!("Action inconnue: {other}")),
     };
     mgr.execute(&id, action).await

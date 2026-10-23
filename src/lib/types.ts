@@ -14,6 +14,20 @@ export interface MacroInfo {
   description: string;
 }
 
+export interface PresetTarget {
+  object: string;
+  kind: "heater" | "temperature_fan";
+  value: number;
+}
+
+export interface Preset {
+  id: string;
+  name: string;
+  source: "mainsail" | "fluidd";
+  targets: PresetTarget[];
+  gcode: string;
+}
+
 export interface PrinterInput {
   name: string;
   url: string;
@@ -62,6 +76,8 @@ export interface Snapshot {
   hostname: string;
   software_version: string;
   macros: MacroInfo[];
+  presets: Preset[];
+  cooldown_gcode: string;
   last_update: number;
   last_error: string | null;
 }
@@ -78,7 +94,10 @@ export type PrinterAction =
   | "estop"
   | "firmware_restart"
   | "speed"
-  | "gcode";
+  | "gcode"
+  | "preset"
+  | "cooldown"
+  | "reload_presets";
 
 export const EMPTY_HEATER: Heater = { temperature: 0, target: 0, power: 0 };
 
@@ -106,6 +125,8 @@ export const EMPTY_SNAPSHOT: Snapshot = {
   hostname: "",
   software_version: "",
   macros: [],
+  presets: [],
+  cooldown_gcode: "",
   last_update: 0,
   last_error: null,
 };

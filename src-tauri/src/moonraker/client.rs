@@ -21,7 +21,7 @@ use tokio_tungstenite::tungstenite::http::HeaderValue;
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 
-use super::model::{ConnectionState, MacroInfo, PrinterConfig, PrinterUpdate, Snapshot};
+use super::model::{ConnectionState, MacroInfo, Preset, PresetTarget, PrinterConfig, PrinterUpdate, Snapshot};
 
 type Ws = WebSocketStream<MaybeTlsStream<TcpStream>>;
 type WsSink = SplitSink<Ws, Message>;
@@ -64,6 +64,12 @@ pub enum Action {
     EmergencyStop,
     FirmwareRestart,
     Gcode(String),
+    /// Apply a preheat preset by id (see `Snapshot::presets`).
+    ApplyPreset(String),
+    /// Run the cooldown script.
+    Cooldown,
+    /// Re-read presets from the Moonraker database.
+    ReloadPresets,
 }
 
 #[derive(Debug)]
@@ -223,6 +229,7 @@ impl Session {
             .cloned();
 
         self.discover_macros(&objects).await;
+        load_presets(&self.rpc, &self.snapshot).await;
 
         let res = self
             .rpc
@@ -343,8 +350,28 @@ impl Session {
 
 /// Run one printer action. Called from its own task so a long-running G-code
 /// never blocks the session loop (status updates, other commands, keepalive).
-async fn execute(rpc: Rpc, action: Action) -> RpcResult {
+async fn execute(rpc: Rpc, snapshot: Arc<RwLock<Snapshot>>, action: Action) -> RpcResult {
     match action {
+        Action::ApplyPreset(id) => {
+            let script = {
+                let s = snapshot.read().await;
+                s.presets.iter().find(|p| p.id == id).map(Preset::to_gcode)
+            };
+            let Some(script) = script else { return Err("Preset introuvable".into()) };
+            if script.is_empty() {
+                return Err("Preset vide".into());
+            }
+            rpc.call_with_timeout("printer.gcode.script", json!({ "script": script }), GCODE_TIMEOUT).await
+        }
+        Action::Cooldown => {
+            let script = snapshot.read().await.cooldown_gcode.clone();
+            let script = if script.is_empty() { "TURN_OFF_HEATERS".to_string() } else { script };
+            rpc.call_with_timeout("printer.gcode.script", json!({ "script": script }), GCODE_TIMEOUT).await
+        }
+        Action::ReloadPresets => {
+            load_presets(&rpc, &snapshot).await;
+            Ok(Value::Null)
+        }
         Action::Pause => rpc.call("printer.print.pause", json!({})).await,
         Action::Resume => rpc.call("printer.print.resume", json!({})).await,
         Action::Cancel => rpc.call("printer.print.cancel", json!({})).await,
@@ -354,6 +381,105 @@ async fn execute(rpc: Rpc, action: Action) -> RpcResult {
             rpc.call_with_timeout("printer.gcode.script", json!({ "script": script }), GCODE_TIMEOUT)
                 .await
         }
+    }
+}
+
+/// Read preheat presets from Mainsail (`mainsail/presets`) and Fluidd
+/// (`fluidd/uiSettings`). A missing namespace is not an error.
+async fn load_presets(rpc: &Rpc, snapshot: &Arc<RwLock<Snapshot>>) {
+    let mut presets: Vec<Preset> = Vec::new();
+    let mut cooldown = String::new();
+
+    if let Ok(v) = rpc
+        .call("server.database.get_item", json!({ "namespace": "mainsail", "key": "presets" }))
+        .await
+    {
+        let value = v.get("value").cloned().unwrap_or(Value::Null);
+        if let Some(c) = value.get("cooldownGcode").and_then(Value::as_str) {
+            cooldown = c.trim().to_string();
+        }
+        if let Some(map) = value.get("presets").and_then(Value::as_object) {
+            for (id, p) in map {
+                let name = p.get("name").and_then(Value::as_str).unwrap_or("").trim().to_string();
+                if name.is_empty() {
+                    continue;
+                }
+                let mut targets = Vec::new();
+                if let Some(values) = p.get("values").and_then(Value::as_object) {
+                    for (object, t) in values {
+                        let enabled = t.get("bool").and_then(Value::as_bool).unwrap_or(false);
+                        let value = t.get("value").and_then(Value::as_f64).unwrap_or(0.0);
+                        if !enabled {
+                            continue;
+                        }
+                        let kind = t.get("type").and_then(Value::as_str).unwrap_or("heater");
+                        targets.push(PresetTarget { object: object.clone(), kind: kind.to_string(), value });
+                    }
+                }
+                targets.sort_by_key(|t| heater_rank(&t.object));
+                presets.push(Preset {
+                    id: format!("mainsail:{id}"),
+                    name,
+                    source: "mainsail".into(),
+                    targets,
+                    gcode: p.get("gcode").and_then(Value::as_str).unwrap_or("").to_string(),
+                });
+            }
+        }
+    }
+
+    if let Ok(v) = rpc
+        .call("server.database.get_item", json!({ "namespace": "fluidd", "key": "uiSettings" }))
+        .await
+    {
+        if let Some(list) = v.pointer("/value/dashboard/tempPresets").and_then(Value::as_array) {
+            for (i, p) in list.iter().enumerate() {
+                let name = p.get("name").and_then(Value::as_str).unwrap_or("").trim().to_string();
+                if name.is_empty() {
+                    continue;
+                }
+                let mut targets = Vec::new();
+                if let Some(values) = p.get("values").and_then(Value::as_object) {
+                    for (object, t) in values {
+                        let active = t.get("active").and_then(Value::as_bool).unwrap_or(true);
+                        let value = t.get("value").and_then(Value::as_f64).unwrap_or(0.0);
+                        if !active {
+                            continue;
+                        }
+                        let kind = match t.get("type").and_then(Value::as_str) {
+                            Some("fan") => "temperature_fan",
+                            _ => "heater",
+                        };
+                        targets.push(PresetTarget { object: object.clone(), kind: kind.to_string(), value });
+                    }
+                }
+                targets.sort_by_key(|t| heater_rank(&t.object));
+                let id = p.get("id").and_then(Value::as_str).map(str::to_string).unwrap_or_else(|| i.to_string());
+                presets.push(Preset {
+                    id: format!("fluidd:{id}"),
+                    name,
+                    source: "fluidd".into(),
+                    targets,
+                    gcode: p.get("gcode").and_then(Value::as_str).unwrap_or("").to_string(),
+                });
+            }
+        }
+    }
+
+    presets.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    let mut s = snapshot.write().await;
+    s.presets = presets;
+    s.cooldown_gcode = if cooldown.is_empty() { "TURN_OFF_HEATERS".into() } else { cooldown };
+}
+
+/// Display order: extruder, bed, then the rest.
+fn heater_rank(object: &str) -> u8 {
+    match object {
+        "extruder" => 0,
+        "heater_bed" => 1,
+        o if o.starts_with("extruder") => 0,
+        o if o.starts_with("heater_generic") => 2,
+        _ => 3,
     }
 }
 
@@ -463,9 +589,14 @@ async fn session(
                 cmd = cmd_rx.recv() => match cmd {
                     Some(c) => {
                         let rpc = sess.rpc.clone();
+                        let snap = sess.snapshot.clone();
+                        let updates = sess.updates.clone();
+                        let id = sess.cfg.id.clone();
                         tokio::spawn(async move {
-                            let res = execute(rpc, c.action).await;
+                            let res = execute(rpc, snap.clone(), c.action).await;
                             let _ = c.reply.send(res);
+                            // Presets may have changed; push the fresh snapshot to the UI.
+                            let _ = updates.try_send(PrinterUpdate { id, snapshot: snap.read().await.clone() });
                         });
                     }
                     None => return Ok(()),

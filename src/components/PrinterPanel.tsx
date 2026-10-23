@@ -17,6 +17,8 @@ import {
   Loader2,
   Home,
   Unplug,
+  Flame,
+  Snowflake,
 } from "lucide-react";
 import { useStore, useSelectedPrinter } from "@/store";
 import { backend } from "@/lib/backend";
@@ -54,7 +56,7 @@ export function PrinterPanel() {
           {snapshot.message}
         </div>
       )}
-      <Temperatures snapshot={snapshot} />
+      <Temperatures printer={printer} snapshot={snapshot} />
       {busy && <Controls printer={printer} snapshot={snapshot} />}
       <Macros printer={printer} snapshot={snapshot} />
       <CameraCard printer={printer} />
@@ -230,14 +232,15 @@ function StateBadge({ snapshot: s }: { snapshot: Snapshot }) {
   return <Badge tone={tone}>{stateLabel(s.print_state)}</Badge>;
 }
 
-function Temperatures({ snapshot: s }: { snapshot: Snapshot }) {
+function Temperatures({ printer, snapshot: s }: { printer: PrinterConfig; snapshot: Snapshot }) {
   const tiles = [
     { label: "Buse", h: s.extruder, color: "text-heat" },
     { label: "Lit", h: s.bed, color: "text-bed" },
     ...(s.chamber ? [{ label: "Caisson", h: s.chamber, color: "text-chamber" }] : []),
   ];
   return (
-    <div className={cn("grid gap-2", tiles.length === 3 ? "grid-cols-3" : "grid-cols-2")}>
+    <div className="flex flex-col gap-2">
+      <div className={cn("grid gap-2", tiles.length === 3 ? "grid-cols-3" : "grid-cols-2")}>
       {tiles.map((t) => (
         <Card key={t.label} className="px-3 py-2">
           <div className="text-[11px] font-medium text-fg-2">{t.label}</div>
@@ -255,6 +258,70 @@ function Temperatures({ snapshot: s }: { snapshot: Snapshot }) {
           )}
         </Card>
       ))}
+      </div>
+      {!isBusy(s) && <Presets printer={printer} snapshot={s} />}
+    </div>
+  );
+}
+
+const TARGET_LABELS: Record<string, string> = { extruder: "Buse", heater_bed: "Lit" };
+
+function targetLabel(object: string) {
+  if (TARGET_LABELS[object]) return TARGET_LABELS[object];
+  const short = object.replace(/^(heater_generic|temperature_fan|extruder)\s*/, "") || object;
+  return short.toLowerCase().includes("chamber") ? "Caisson" : short;
+}
+
+/** Preheat presets read from Mainsail / Fluidd, plus a cooldown button while anything is heating. */
+function Presets({ printer, snapshot: s }: { printer: PrinterConfig; snapshot: Snapshot }) {
+  const { pending, run } = useAction(printer.id);
+  const ready = s.klippy_state === "ready";
+  const heating = s.extruder.target > 0 || s.bed.target > 0 || (s.chamber?.target ?? 0) > 0;
+  if (s.presets.length === 0 && !heating) return null;
+
+  const isActive = (p: (typeof s.presets)[number]) =>
+    p.targets.length > 0 &&
+    p.targets.every((t) => {
+      const h = t.object === "extruder" ? s.extruder : t.object === "heater_bed" ? s.bed : t.object.includes("chamber") ? s.chamber : null;
+      return h == null || Math.abs(h.target - t.value) < 0.5;
+    });
+
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <Flame size={13} className="text-fg-3" />
+      {s.presets.map((p) => {
+        const running = pending === `preset:${p.id}`;
+        const active = isActive(p);
+        const tip = p.targets.map((t) => `${targetLabel(t.object)} ${Math.round(t.value)}°`).join(" · ") + (p.gcode.trim() ? " + G-code" : "");
+        return (
+          <button
+            key={p.id}
+            title={tip}
+            disabled={!ready || pending != null}
+            onClick={() => run("preset", p.id)}
+            className={cn(
+              "rounded-lg px-2.5 py-1 text-[12px] font-medium transition disabled:opacity-50",
+              active ? "bg-heat/15 text-heat" : "bg-surface-3 text-fg hover:brightness-110",
+              running && "bg-accent text-accent-fg",
+            )}
+          >
+            {running ? <Loader2 size={12} className="inline animate-spin" /> : null} {p.name}
+          </button>
+        );
+      })}
+      {heating && (
+        <button
+          title={s.cooldown_gcode || "TURN_OFF_HEATERS"}
+          disabled={!ready || pending != null}
+          onClick={() => run("cooldown")}
+          className="ml-auto rounded-lg bg-surface-3 px-2.5 py-1 text-[12px] font-medium text-chamber transition hover:brightness-110 disabled:opacity-50"
+        >
+          {pending === "cooldown" ? <Loader2 size={12} className="inline animate-spin" /> : <Snowflake size={12} className="inline" />} Refroidir
+        </button>
+      )}
+      {s.presets.length === 0 && !heating ? null : s.presets.length === 0 ? (
+        <span className="text-[11px] text-fg-3">Aucun preset (à créer dans Mainsail ou Fluidd)</span>
+      ) : null}
     </div>
   );
 }

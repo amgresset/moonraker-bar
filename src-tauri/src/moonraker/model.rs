@@ -73,6 +73,52 @@ pub struct MacroInfo {
     pub description: String,
 }
 
+/// One target inside a preheat preset.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct PresetTarget {
+    /// Klipper object, e.g. `extruder`, `heater_bed`, `heater_generic chamber`, `temperature_fan hotend`.
+    pub object: String,
+    /// `heater` or `temperature_fan`.
+    pub kind: String,
+    pub value: f64,
+}
+
+/// A preheat preset read from Mainsail's or Fluidd's settings in the Moonraker database.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Preset {
+    pub id: String,
+    pub name: String,
+    /// `mainsail` or `fluidd`.
+    pub source: String,
+    pub targets: Vec<PresetTarget>,
+    #[serde(default)]
+    pub gcode: String,
+}
+
+impl Preset {
+    /// The script Mainsail would send for this preset.
+    pub fn to_gcode(&self) -> String {
+        let mut lines: Vec<String> = Vec::new();
+        for t in &self.targets {
+            match t.kind.as_str() {
+                "temperature_fan" => {
+                    let name = t.object.strip_prefix("temperature_fan ").unwrap_or(&t.object);
+                    lines.push(format!("SET_TEMPERATURE_FAN_TARGET TEMPERATURE_FAN={name} TARGET={}", t.value));
+                }
+                _ => {
+                    let name = t.object.strip_prefix("heater_generic ").unwrap_or(&t.object);
+                    lines.push(format!("SET_HEATER_TEMPERATURE HEATER={name} TARGET={}", t.value));
+                }
+            }
+        }
+        let extra = self.gcode.trim();
+        if !extra.is_empty() {
+            lines.push(extra.to_string());
+        }
+        lines.join("\n")
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct Heater {
     pub temperature: f64,
@@ -119,6 +165,10 @@ pub struct Snapshot {
     pub software_version: String,
     /// Public `gcode_macro` sections (names not starting with `_`), sorted.
     pub macros: Vec<MacroInfo>,
+    /// Preheat presets from Mainsail / Fluidd.
+    pub presets: Vec<Preset>,
+    /// Script that turns everything off (Mainsail setting, default `TURN_OFF_HEATERS`).
+    pub cooldown_gcode: String,
     /// Unix epoch, milliseconds.
     pub last_update: u64,
     pub last_error: Option<String>,
