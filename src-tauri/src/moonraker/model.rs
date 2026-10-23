@@ -125,6 +125,22 @@ impl Preset {
     }
 }
 
+/// A webcam as configured in Moonraker (`[webcam]` sections, or added from Mainsail / Fluidd).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+pub struct Webcam {
+    pub name: String,
+    pub enabled: bool,
+    /// `mjpegstreamer`, `mjpegstreamer-adaptive`, `webrtc-camerastreamer`, `hlsstream`, `ipstream`…
+    pub service: String,
+    /// Absolute or relative to the web UI host, e.g. `/webcam/?action=stream`.
+    pub stream_url: String,
+    pub snapshot_url: String,
+    pub flip_horizontal: bool,
+    pub flip_vertical: bool,
+    /// 0, 90, 180 or 270.
+    pub rotation: i64,
+}
+
 /// One heater, sensor or temperature fan, as discovered on the printer.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct TempReading {
@@ -458,6 +474,8 @@ pub struct Snapshot {
     pub afc: Option<AfcState>,
     /// Every heater / sensor / temperature fan on the printer, in discovery order.
     pub temperatures: Vec<TempReading>,
+    /// Webcams configured in Moonraker.
+    pub webcams: Vec<Webcam>,
     /// Unix epoch, milliseconds.
     pub last_update: u64,
     pub last_error: Option<String>,

@@ -38,6 +38,17 @@ export function resolveLayout(layout: Layout): { order: CardId[]; hidden: Set<Ca
   return { order, hidden: new Set(layout.hidden.filter((c): c is CardId => known.has(c))) };
 }
 
+export interface Webcam {
+  name: string;
+  enabled: boolean;
+  service: string;
+  stream_url: string;
+  snapshot_url: string;
+  flip_horizontal: boolean;
+  flip_vertical: boolean;
+  rotation: number;
+}
+
 export type TempKind = "extruder" | "heater_bed" | "heater_generic" | "temperature_sensor" | "temperature_fan";
 
 export interface TempReading {
@@ -176,6 +187,7 @@ export interface Snapshot {
   cooldown_gcode: string;
   afc: AfcState | null;
   temperatures: TempReading[];
+  webcams: Webcam[];
   last_update: number;
   last_error: string | null;
 }
@@ -227,6 +239,7 @@ export const EMPTY_SNAPSHOT: Snapshot = {
   cooldown_gcode: "",
   afc: null,
   temperatures: [],
+  webcams: [],
   last_update: 0,
   last_error: null,
 };

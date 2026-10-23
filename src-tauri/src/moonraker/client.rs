@@ -21,7 +21,9 @@ use tokio_tungstenite::tungstenite::http::HeaderValue;
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 
-use super::model::{AfcKeys, ConnectionState, MacroInfo, Preset, PresetTarget, PrinterConfig, PrinterUpdate, Snapshot, TempReading};
+use super::model::{
+    AfcKeys, ConnectionState, MacroInfo, Preset, PresetTarget, PrinterConfig, PrinterUpdate, Snapshot, TempReading, Webcam,
+};
 
 type Ws = WebSocketStream<MaybeTlsStream<TcpStream>>;
 type WsSink = SplitSink<Ws, Message>;
@@ -255,6 +257,7 @@ impl Session {
 
         self.discover_macros(&objects).await;
         load_presets(&self.rpc, &self.snapshot).await;
+        load_webcams(&self.rpc, &self.snapshot).await;
 
         let temps = self.snapshot.read().await.temperatures.clone();
         let res = self
@@ -354,6 +357,10 @@ impl Session {
                 if let Err(e) = self.subscribe().await {
                     log::warn!("[{}] resubscribe failed: {e}", self.cfg.name);
                 }
+                self.publish().await;
+            }
+            "notify_webcams_changed" => {
+                load_webcams(&self.rpc, &self.snapshot).await;
                 self.publish().await;
             }
             "notify_klippy_shutdown" | "notify_klippy_disconnected" => {
@@ -496,6 +503,35 @@ async fn load_presets(rpc: &Rpc, snapshot: &Arc<RwLock<Snapshot>>) {
     let mut s = snapshot.write().await;
     s.presets = presets;
     s.cooldown_gcode = if cooldown.is_empty() { "TURN_OFF_HEATERS".into() } else { cooldown };
+}
+
+/// Read the webcams Moonraker knows about (`server.webcams.list`). Missing on old
+/// Moonraker versions: then the list stays empty and the manual camera URL is used.
+async fn load_webcams(rpc: &Rpc, snapshot: &Arc<RwLock<Snapshot>>) {
+    let Ok(v) = rpc.call("server.webcams.list", json!({})).await else { return };
+    let webcams: Vec<Webcam> = v
+        .get("webcams")
+        .and_then(Value::as_array)
+        .map(|list| {
+            list.iter()
+                .map(|w| {
+                    let s = |k: &str| w.get(k).and_then(Value::as_str).unwrap_or("").to_string();
+                    let b = |k: &str| w.get(k).and_then(Value::as_bool).unwrap_or(false);
+                    Webcam {
+                        name: s("name"),
+                        enabled: w.get("enabled").and_then(Value::as_bool).unwrap_or(true),
+                        service: s("service"),
+                        stream_url: s("stream_url"),
+                        snapshot_url: s("snapshot_url"),
+                        flip_horizontal: b("flip_horizontal"),
+                        flip_vertical: b("flip_vertical"),
+                        rotation: w.get("rotation").and_then(Value::as_i64).unwrap_or(0),
+                    }
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    snapshot.write().await.webcams = webcams;
 }
 
 /// Display order: extruder, bed, then the rest.

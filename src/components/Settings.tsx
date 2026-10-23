@@ -169,8 +169,8 @@ function PrinterForm({ initial, onDone }: { initial: PrinterConfig | null; onDon
         <Field label="Web UI" hint="Mainsail or Fluidd. Empty = the Moonraker host without its port.">
           <Input value={form.web_url ?? ""} onChange={set("web_url")} placeholder="http://voron.local" spellCheck={false} />
         </Field>
-        <Field label="Camera snapshot" hint="Absolute, or relative to the Moonraker URL, e.g. /webcam/?action=snapshot">
-          <Input value={form.camera_url ?? ""} onChange={set("camera_url")} placeholder="/webcam/?action=snapshot" spellCheck={false} />
+        <Field label="Camera URL" hint="Optional: the webcam set up in Mainsail / Fluidd is used automatically. Stream or snapshot URL, absolute or relative to the web UI.">
+          <Input value={form.camera_url ?? ""} onChange={set("camera_url")} placeholder="auto" spellCheck={false} />
         </Field>
 
         {testResult && (

@@ -36,4 +36,6 @@ export const backend = {
     listen<PrinterUpdate>("printer:update", (e) => cb(e.payload)),
   onPrintersChanged: (cb: (list: PrinterConfig[]) => void): Promise<UnlistenFn> =>
     listen<PrinterConfig[]>("printers:changed", (e) => cb(e.payload)),
+  onPopoverVisibility: (cb: (visible: boolean) => void): Promise<UnlistenFn> =>
+    listen<boolean>("popover:visibility", (e) => cb(e.payload)),
 };

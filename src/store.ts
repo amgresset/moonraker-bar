@@ -16,6 +16,8 @@ interface State {
   view: View;
   error: string | null;
   layout: Layout;
+  /** False while the popover is hidden; the camera stream is closed then. */
+  popoverVisible: boolean;
 
   init: () => Promise<void>;
   saveLayout: (layout: Layout) => Promise<void>;
@@ -36,6 +38,7 @@ export const useStore = create<State>((set, get) => ({
   view: "panel",
   error: null,
   layout: { order: [], hidden: [] },
+  popoverVisible: true,
 
   saveLayout: async (layout) => {
     set({ layout });
@@ -56,6 +59,7 @@ export const useStore = create<State>((set, get) => ({
     set({ selectedId: pickSelected(get()) });
 
     unlisten.push(
+      await backend.onPopoverVisibility((popoverVisible) => set({ popoverVisible })),
       await backend.onPrinterUpdate(({ id, snapshot }) => {
         set((s) => ({ snapshots: { ...s.snapshots, [id]: snapshot } }));
         const st = get();

@@ -7,7 +7,10 @@ use std::time::{Duration, Instant};
 use tauri::image::Image;
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-use tauri::{AppHandle, Manager, WebviewWindow};
+use tauri::{AppHandle, Emitter, Manager, WebviewWindow};
+
+/// Tells the web UI whether the popover is on screen, so it can stop the camera stream when hidden.
+const VISIBILITY_EVENT: &str = "popover:visibility";
 use tauri_plugin_positioner::{Position, WindowExt};
 
 use crate::moonraker::{ConnectionState, Snapshot};
@@ -154,18 +157,21 @@ pub fn show_popover(app: &AppHandle) {
     let _ = win.move_window(Position::TrayCenter);
     let _ = win.show();
     let _ = win.set_focus();
+    let _ = app.emit(VISIBILITY_EVENT, true);
 }
 
 pub fn hide_popover(app: &AppHandle) {
     if let Some(win) = popover(app) {
         let _ = win.hide();
     }
+    let _ = app.emit(VISIBILITY_EVENT, false);
 }
 
 pub fn toggle_popover(app: &AppHandle) {
     let Some(win) = popover(app) else { return };
     if win.is_visible().unwrap_or(false) {
         let _ = win.hide();
+        let _ = app.emit(VISIBILITY_EVENT, false);
         return;
     }
     if let Some(guard) = app.try_state::<PopoverGuard>() {
@@ -188,6 +194,7 @@ pub fn popover_blurred(window: &tauri::Window) {
         *guard.0.lock().unwrap() = Some(Instant::now());
     }
     let _ = window.hide();
+    let _ = app.emit(VISIBILITY_EVENT, false);
 }
 
 // ---------- icon rendering ----------

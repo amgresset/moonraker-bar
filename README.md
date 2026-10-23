@@ -47,7 +47,7 @@ Built with **Tauri 2** (Rust) and **React + TypeScript + Tailwind**.
 - **Quick actions**: Home (`G28`), Motors off (`M84`), emergency stop (two-step, always available), firmware restart when Klipper is shut down.
 - **Macros**: every public `gcode_macro` with its description. Pin the ones you want as buttons.
 - **AFC** (Armored Turtle) detected automatically: lanes with T-number, filament color, material and remaining weight, the lane in the tool, hub state, tool-change counter, load a lane, unload, `AFC_RESUME` on error.
-- **Camera** snapshot, refreshed every 4 s.
+- **Live camera**: the webcam configured in Mainsail / Fluidd is picked up automatically and played as a live MJPEG stream (snapshot fallback every 2 s);
 - **Several printers**: fleet view, switcher, and a pin to choose which printer the menu bar follows (by default, whichever is printing).
 - **Notifications** when a print starts, pauses, finishes, is cancelled or fails.
 - **Open in Mainsail / Fluidd** from the header.
@@ -59,7 +59,7 @@ Built with **Tauri 2** (Rust) and **React + TypeScript + Tailwind**.
 Download the file for your system from the [latest release](https://github.com/modship/moonraker-bar/releases/latest):
 
 | System | File | Notes |
-|---|---|---|
+| --- | --- | --- |
 | macOS (Apple Silicon and Intel) | `…_universal.dmg` | Open it and drag the app to Applications. |
 | Windows | `…_x64-setup.exe` or `…_x64_en-US.msi` | SmartScreen may warn on first launch: *More info → Run anyway*. |
 | Linux | `…_amd64.AppImage` | `chmod +x` then run. This is the only Linux build that updates itself. |
@@ -89,7 +89,7 @@ Click the icon, then **Add a printer**:
 - **Moonraker URL**: `http://voron.local:7125` (or the Mainsail / Fluidd URL if Moonraker sits behind nginx).
 - **API key**: only if your machine is not in `trusted_clients` in `moonraker.conf`. Create one in Mainsail or Fluidd.
 - **Web UI**: optional; defaults to the Moonraker host on port 80.
-- **Camera snapshot**: optional, absolute or relative to the Moonraker URL, e.g. `/webcam/?action=snapshot`.
+- **Camera URL**: optional. The webcam set up in Mainsail / Fluidd is used automatically; enter a stream or snapshot URL here only to override it.
 
 **Test** checks the connection before saving. Presets are created in Mainsail or Fluidd and read when the printer connects. No `cors_domains` change is needed: the connection is a websocket from the app's Rust backend, not from a web page.
 

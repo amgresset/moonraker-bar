@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import {
   Pause,
   Play,
@@ -24,6 +24,7 @@ import { useStore, useSelectedPrinter } from "@/store";
 import { backend } from "@/lib/backend";
 import { isBusy, resolveLayout, type CardId, type PrinterConfig, type Snapshot } from "@/lib/types";
 import { useAction } from "@/lib/useAction";
+import { cameraSource } from "@/lib/camera";
 import { tempColor, tempLabel, visibleTemps } from "@/lib/temps";
 import { AfcCard } from "./Afc";
 import { cn, fmtDuration, fmtEta, fmtFilename, fmtPct, fmtTemp, fmtFilament } from "@/lib/format";
@@ -68,7 +69,7 @@ export function PrinterPanel() {
     controls: busy ? <Controls printer={printer} snapshot={snapshot} /> : null,
     afc: snapshot.afc ? <AfcCard printer={printer} snapshot={snapshot} afc={snapshot.afc} /> : null,
     macros: <Macros printer={printer} snapshot={snapshot} />,
-    camera: <CameraCard printer={printer} />,
+    camera: <CameraCard printer={printer} snapshot={snapshot} />,
     actions: <QuickActions printer={printer} snapshot={snapshot} />,
   };
 
@@ -623,26 +624,101 @@ function ConfirmButton({
   );
 }
 
-function CameraCard({ printer }: { printer: PrinterConfig }) {
-  const raw = printer.camera_url?.trim();
-  const [tick, setTick] = useState(0);
-  const [failed, setFailed] = useState(false);
-  useEffect(() => {
-    if (!raw) return;
-    const t = setInterval(() => setTick((n) => n + 1), 4000);
-    return () => clearInterval(t);
-  }, [raw]);
-  if (!raw) return null;
-  const abs = raw.startsWith("http") ? raw : new URL(raw, printer.url.endsWith("/") ? printer.url : printer.url + "/").toString();
-  const src = `${abs}${abs.includes("?") ? "&" : "?"}_t=${tick}`;
+const SNAPSHOT_EVERY_MS = 2000;
+
+/**
+ * An <img> playing an MJPEG stream. Removing an <img> does not close its
+ * connection in WebKit / Chromium, so the src is cleared on unmount to abort it.
+ */
+function StreamImg({ src, alt, style, onError }: { src: string; alt: string; style?: CSSProperties; onError: () => void }) {
+  const ref = useRef<HTMLImageElement>(null);
+  const alive = useRef(true);
+  useLayoutEffect(() => {
+    const img = ref.current;
+    alive.current = true;
+    return () => {
+      // Ignore the error the aborted request is about to raise.
+      alive.current = false;
+      if (img) img.src = "data:,";
+    };
+  }, [src]);
   return (
-    <Card className="overflow-hidden p-0">
-      {failed ? (
-        <div className="flex items-center justify-center gap-2 py-6 text-[12px] text-fg-3">
-          <Camera size={14} /> Camera unavailable
-        </div>
-      ) : (
-        <img src={src} alt="Camera" className="block aspect-video w-full object-cover" onError={() => setFailed(true)} onLoad={() => setFailed(false)} />
+    <img
+      ref={ref}
+      src={src}
+      alt={alt}
+      className="block h-full w-full object-cover"
+      style={style}
+      onError={() => alive.current && onError()}
+    />
+  );
+}
+
+/**
+ * Live MJPEG stream when the camera offers one, else a snapshot refreshed every 2 s.
+ * Nothing is downloaded while the popover is hidden.
+ */
+function CameraCard({ printer, snapshot }: { printer: PrinterConfig; snapshot: Snapshot }) {
+  const visible = useStore((s) => s.popoverVisible);
+  const source = cameraSource(printer, snapshot);
+  const key = `${source?.stream ?? ""}|${source?.snapshot ?? ""}`;
+
+  const [streamFailed, setStreamFailed] = useState(false);
+  const [snapshotFailed, setSnapshotFailed] = useState(false);
+  const [tick, setTick] = useState(0);
+  /** Changes every time the popover opens (or the camera changes), so the stream is a fresh request. */
+  const sessions = useRef(0);
+  const session = useMemo(() => ++sessions.current, [key, visible]);
+
+  // New camera, or popover shown again: try the live stream first.
+  useEffect(() => {
+    setStreamFailed(false);
+    setSnapshotFailed(false);
+  }, [key, visible]);
+
+  const live = !!source?.stream && !streamFailed;
+
+  useEffect(() => {
+    if (!visible || live || !source?.snapshot) return;
+    const t = setInterval(() => setTick((n) => n + 1), snapshotFailed ? 10000 : SNAPSHOT_EVERY_MS);
+    return () => clearInterval(t);
+  }, [visible, live, source?.snapshot, snapshotFailed]);
+
+  if (!source) return null;
+
+  const imgStyle = source.transform ? { transform: source.transform } : undefined;
+  const snapSrc = source.snapshot ? `${source.snapshot}${source.snapshot.includes("?") ? "&" : "?"}_t=${tick}` : null;
+
+  return (
+    <Card className="relative overflow-hidden p-0" title={source.name}>
+      <div className="aspect-video w-full bg-black/40">
+        {!visible ? null : live ? (
+          <StreamImg
+            key={`stream-${key}-${session}`}
+            src={`${source.stream}${source.stream!.includes("?") ? "&" : "?"}_s=${session}`}
+            alt={source.name}
+            style={imgStyle}
+            onError={() => setStreamFailed(true)}
+          />
+        ) : snapSrc && !snapshotFailed ? (
+          <img
+            src={snapSrc}
+            alt={source.name}
+            className="block h-full w-full object-cover"
+            style={imgStyle}
+            onError={() => setSnapshotFailed(true)}
+            onLoad={() => setSnapshotFailed(false)}
+          />
+        ) : (
+          <div className="flex h-full items-center justify-center gap-2 text-[12px] text-fg-3">
+            <Camera size={14} /> Camera unavailable
+          </div>
+        )}
+      </div>
+      {visible && live && (
+        <span className="absolute top-2 left-2 flex items-center gap-1 rounded-full bg-black/55 px-2 py-0.5 text-[10px] font-semibold text-white">
+          <span className="h-1.5 w-1.5 rounded-full bg-danger" /> LIVE
+        </span>
       )}
     </Card>
   );
