@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/hero.png" alt="Moonraker Bar: a printing job with AFC lanes, an idle printer with presets, and the fleet view" width="900">
+  <img src="docs/screenshots/demo.webp" alt="Moonraker Bar demo: live progress in the menu bar, pause and resume, the fleet view, and a Mainsail preset heating a printer" width="900">
 </p>
 
 Moonraker Bar keeps your Klipper printers in the menu bar (macOS) or system tray (Linux, Windows). Glance at the icon for progress and time left; click it for the full picture: current job, ETA, layers, temperatures, pause / resume / cancel, print speed, your pinned Klipper macros, Mainsail / Fluidd preheat presets, and every AFC lane if a Box Turtle is attached. It watches several printers at once, pins the one you care about to the bar, and notifies you when a print finishes, pauses or fails. It talks to Moonraker directly over your network: no account, no cloud, no telemetry.
