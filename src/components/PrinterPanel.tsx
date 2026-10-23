@@ -15,6 +15,8 @@ import {
   Terminal,
   Check,
   Loader2,
+  Home,
+  Unplug,
 } from "lucide-react";
 import { useStore, useSelectedPrinter } from "@/store";
 import { backend } from "@/lib/backend";
@@ -56,7 +58,7 @@ export function PrinterPanel() {
       {busy && <Controls printer={printer} snapshot={snapshot} />}
       <Macros printer={printer} snapshot={snapshot} />
       <CameraCard printer={printer} />
-      <EmergencyStop printer={printer} />
+      <QuickActions printer={printer} snapshot={snapshot} />
     </div>
   );
 }
@@ -140,7 +142,7 @@ function JobCard({ snapshot: s }: { snapshot: Snapshot }) {
           <div className="text-[14px] font-semibold tracking-tight">Prête à imprimer</div>
           <div className="truncate text-[11px] text-fg-3">
             {s.hostname || "Klipper"}
-            {s.software_version ? ` · Moonraker ${s.software_version.replace(/^v/, "")}` : ""}
+            {s.software_version ? ` · Moonraker ${s.software_version.replace(/^v/, "").split("-")[0]}` : ""}
           </div>
         </div>
         <span className="h-2 w-2 rounded-full bg-ok" />
@@ -331,19 +333,42 @@ function Controls({ printer, snapshot: s }: { printer: PrinterConfig; snapshot: 
   );
 }
 
-function EmergencyStop({ printer }: { printer: PrinterConfig }) {
+/** Home, motors off and the emergency stop. Motion commands are locked while printing. */
+function QuickActions({ printer, snapshot: s }: { printer: PrinterConfig; snapshot: Snapshot }) {
   const { pending, run } = useAction(printer.id);
+  const ready = s.klippy_state === "ready";
+  const busy = isBusy(s);
+  const lockMotion = !ready || busy || pending != null;
+  const homing = pending === "gcode:G28";
+  const motorsOff = pending === "gcode:M84";
   return (
-    <div className="flex justify-end">
+    <div className="flex items-center gap-2">
+      <Button
+        className="flex-1"
+        icon={homing ? <Loader2 size={14} className="animate-spin" /> : <Home size={14} />}
+        disabled={lockMotion}
+        title={busy ? "Indisponible pendant une impression" : "G28 — origine de tous les axes"}
+        onClick={() => run("gcode", "G28")}
+      >
+        Home
+      </Button>
+      <Button
+        className="flex-1"
+        icon={motorsOff ? <Loader2 size={14} className="animate-spin" /> : <Unplug size={14} />}
+        disabled={lockMotion}
+        title={busy ? "Indisponible pendant une impression" : "M84 — couper les moteurs"}
+        onClick={() => run("gcode", "M84")}
+      >
+        Moteurs off
+      </Button>
       <ConfirmButton
-        label="Arrêt d'urgence"
-        confirmLabel="Confirmer l'arrêt ?"
-        variant="ghost"
-        size="sm"
-        icon={<AlertTriangle size={12} />}
+        label="Stop"
+        confirmLabel="Confirmer ?"
+        icon={<AlertTriangle size={14} />}
         disabled={pending != null}
         onConfirm={() => run("estop")}
-        className="text-danger hover:bg-danger/10 hover:text-danger"
+        className="flex-1 bg-danger text-white hover:bg-danger hover:brightness-110"
+        title="Arrêt d'urgence Klipper (nécessite un Firmware restart ensuite)"
       />
     </div>
   );
@@ -468,6 +493,7 @@ function ConfirmButton({
   icon,
   disabled,
   className,
+  title,
 }: {
   label: string;
   confirmLabel: string;
@@ -477,6 +503,7 @@ function ConfirmButton({
   icon?: ReactNode;
   disabled?: boolean;
   className?: string;
+  title?: string;
 }) {
   const [armed, setArmed] = useState(false);
   useEffect(() => {
@@ -490,6 +517,7 @@ function ConfirmButton({
       size={size}
       icon={icon}
       disabled={disabled}
+      title={title}
       className={cn(armed && "ring-2 ring-danger/40", className)}
       onClick={() => {
         if (armed) {
