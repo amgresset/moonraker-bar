@@ -18,6 +18,9 @@ pub struct PrinterConfig {
     /// (e.g. `/webcam/?action=snapshot`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub camera_url: Option<String>,
+    /// Web UI (Mainsail / Fluidd). Empty = the Moonraker host without its port.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub web_url: Option<String>,
     /// Klipper macros shown as buttons in the panel, in display order.
     #[serde(default)]
     pub pinned_macros: Vec<String>,

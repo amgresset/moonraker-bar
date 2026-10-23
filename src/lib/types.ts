@@ -6,6 +6,7 @@ export interface PrinterConfig {
   url: string;
   api_key?: string;
   camera_url?: string;
+  web_url?: string;
   pinned_macros: string[];
 }
 
@@ -33,6 +34,7 @@ export interface PrinterInput {
   url: string;
   api_key?: string;
   camera_url?: string;
+  web_url?: string;
 }
 
 export type ConnectionState = "offline" | "connecting" | "connected";

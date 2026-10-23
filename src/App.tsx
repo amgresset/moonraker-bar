@@ -1,9 +1,10 @@
 import { useEffect, useLayoutEffect, useRef } from "react";
 import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
-import { Settings as SettingsIcon, X, Power, ChevronLeft } from "lucide-react";
-import { useStore } from "./store";
+import { openUrl } from "@tauri-apps/plugin-opener";
+import { Settings as SettingsIcon, X, Power, ChevronLeft, ExternalLink } from "lucide-react";
+import { useStore, useSelectedPrinter } from "./store";
 import { backend } from "./lib/backend";
-import { cn } from "./lib/format";
+import { cn, webUiUrl } from "./lib/format";
 import { PrinterSwitcher } from "./components/PrinterSwitcher";
 import { PrinterPanel } from "./components/PrinterPanel";
 import { Fleet } from "./components/Fleet";
@@ -16,7 +17,9 @@ const MAX_HEIGHT = 700;
 
 export default function App() {
   const { ready, view, setView, error, setError, printers } = useStore();
+  const { printer } = useSelectedPrinter();
   const rootRef = useRef<HTMLDivElement>(null);
+  const webUi = printer ? webUiUrl(printer) : null;
 
   useEffect(() => {
     useStore.getState().init().catch((e) => setError(String(e)));
@@ -74,6 +77,11 @@ export default function App() {
           </>
         ) : (
           <div className="flex-1 text-[15px] font-semibold tracking-tight">{title}</div>
+        )}
+        {view === "panel" && webUi && (
+          <IconButton title={`Ouvrir ${webUi}`} onClick={() => openUrl(webUi).catch((e) => setError(String(e)))}>
+            <ExternalLink size={15} />
+          </IconButton>
         )}
         {view === "settings" ? (
           <IconButton title="Retour" onClick={() => setView(multi ? "fleet" : "panel")}>

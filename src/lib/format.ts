@@ -43,3 +43,15 @@ export function fmtFilament(mm: number): string {
   const m = mm / 1000;
   return m >= 10 ? `${m.toFixed(1)} m` : `${m.toFixed(2)} m`;
 }
+
+/** Where the printer's web UI lives: the configured URL, else the Moonraker host on port 80. */
+export function webUiUrl(printer: { url: string; web_url?: string }): string | null {
+  const explicit = printer.web_url?.trim();
+  if (explicit) return explicit.startsWith("http") ? explicit : `http://${explicit}`;
+  try {
+    const u = new URL(printer.url);
+    return `${u.protocol}//${u.hostname}/`;
+  } catch {
+    return null;
+  }
+}

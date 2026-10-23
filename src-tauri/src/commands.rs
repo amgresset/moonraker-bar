@@ -21,6 +21,8 @@ pub struct PrinterInput {
     pub api_key: Option<String>,
     #[serde(default)]
     pub camera_url: Option<String>,
+    #[serde(default)]
+    pub web_url: Option<String>,
 }
 
 impl PrinterInput {
@@ -36,6 +38,7 @@ impl PrinterInput {
             url,
             api_key: clean(self.api_key),
             camera_url: clean(self.camera_url),
+            web_url: clean(self.web_url),
             pinned_macros,
         };
         cfg.websocket_url()?; // validate

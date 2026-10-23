@@ -97,6 +97,7 @@ function PrinterForm({ initial, onDone }: { initial: PrinterConfig | null; onDon
     url: initial?.url ?? "http://",
     api_key: initial?.api_key ?? "",
     camera_url: initial?.camera_url ?? "",
+    web_url: initial?.web_url ?? "",
   });
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; text: string } | null>(null);
@@ -145,6 +146,9 @@ function PrinterForm({ initial, onDone }: { initial: PrinterConfig | null; onDon
         </Field>
         <Field label="Clé API" hint="Facultative sauf si l'authentification est activée dans Moonraker.">
           <Input value={form.api_key ?? ""} onChange={set("api_key")} placeholder="—" spellCheck={false} />
+        </Field>
+        <Field label="Interface web" hint="Mainsail ou Fluidd. Vide = même hôte que Moonraker sans le port.">
+          <Input value={form.web_url ?? ""} onChange={set("web_url")} placeholder="http://voron.local" spellCheck={false} />
         </Field>
         <Field label="Snapshot caméra" hint="Absolue, ou relative à l'URL Moonraker, ex. /webcam/?action=snapshot">
           <Input value={form.camera_url ?? ""} onChange={set("camera_url")} placeholder="/webcam/?action=snapshot" spellCheck={false} />
