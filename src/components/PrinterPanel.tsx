@@ -37,9 +37,9 @@ export function PrinterPanel() {
   if (!printer) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
-        <div className="text-fg-2">Aucune imprimante configurée.</div>
+        <div className="text-fg-2">No printer configured.</div>
         <Button variant="primary" onClick={() => setView("settings")}>
-          Ajouter une imprimante
+          Add a printer
         </Button>
       </div>
     );
@@ -76,10 +76,10 @@ function OfflineCard({ printer, snapshot }: { printer: PrinterConfig; snapshot: 
   return (
     <Card className="flex flex-col items-center gap-2 py-8 text-center">
       <div className={cn("h-3 w-3 rounded-full", connecting ? "bg-warn pulse-soft" : "bg-fg-3")} />
-      <div className="font-semibold">{connecting ? "Connexion…" : "Hors ligne"}</div>
+      <div className="font-semibold">{connecting ? "Connecting…" : "Offline"}</div>
       <div className="text-[12px] text-fg-2">{printer.url}</div>
       {snapshot.last_error && <div className="text-[12px] text-danger">{snapshot.last_error}</div>}
-      {!connecting && <div className="text-[11px] text-fg-3">Nouvelle tentative automatique…</div>}
+      {!connecting && <div className="text-[11px] text-fg-3">Retrying automatically…</div>}
     </Card>
   );
 }
@@ -101,7 +101,7 @@ function KlippyBanner({ printer, snapshot }: { printer: PrinterConfig; snapshot:
     <div className={cn("rounded-lg px-3 py-2 text-[12px]", bad ? "bg-danger/10 text-danger" : "bg-warn/10 text-warn")}>
       <div className="flex items-center gap-1.5 font-medium">
         <AlertTriangle size={13} />
-        Klipper : {labelKlippy(snapshot.klippy_state)}
+        Klipper: {labelKlippy(snapshot.klippy_state)}
       </div>
       {snapshot.klippy_message && (
         <div className="mt-1 max-h-16 overflow-y-auto whitespace-pre-wrap font-mono text-[11px] opacity-90">
@@ -120,15 +120,15 @@ function KlippyBanner({ printer, snapshot }: { printer: PrinterConfig; snapshot:
 function labelKlippy(state: string) {
   switch (state) {
     case "startup":
-      return "démarrage";
+      return "starting up";
     case "shutdown":
-      return "arrêt (shutdown)";
+      return "shutdown";
     case "error":
-      return "erreur";
+      return "error";
     case "disconnected":
-      return "déconnecté";
+      return "disconnected";
     default:
-      return state || "inconnu";
+      return state || "unknown";
   }
 }
 
@@ -145,7 +145,7 @@ function JobCard({ snapshot: s }: { snapshot: Snapshot }) {
           <Printer size={16} />
         </div>
         <div className="min-w-0 flex-1">
-          <div className="text-[14px] font-semibold tracking-tight">Prête à imprimer</div>
+          <div className="text-[14px] font-semibold tracking-tight">Ready to print</div>
           <div className="truncate text-[11px] text-fg-3">
             {s.hostname || "Klipper"}
             {s.software_version ? ` · Moonraker ${s.software_version.replace(/^v/, "").split("-")[0]}` : ""}
@@ -163,7 +163,7 @@ function JobCard({ snapshot: s }: { snapshot: Snapshot }) {
           {busy ? (
             <>
               <div className="text-[22px] font-semibold leading-none tabular-nums tracking-tight">{fmtPct(s.progress)}</div>
-              <div className="mt-1 text-[11px] text-fg-2">{s.time_left != null ? `${fmtDuration(s.time_left)} restant` : "estimation…"}</div>
+              <div className="mt-1 text-[11px] text-fg-2">{s.time_left != null ? `${fmtDuration(s.time_left)} left` : "estimating…"}</div>
             </>
           ) : (
             <div className="text-[13px] font-medium text-fg-2">{stateLabel(s.print_state)}</div>
@@ -175,21 +175,21 @@ function JobCard({ snapshot: s }: { snapshot: Snapshot }) {
             <StateBadge snapshot={s} />
           </div>
           <div className="truncate text-[14px] font-semibold tracking-tight" title={s.filename}>
-            {s.filename ? fmtFilename(s.filename) : "Aucun fichier"}
+            {s.filename ? fmtFilename(s.filename) : "No file"}
           </div>
           {busy && (
             <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-2 gap-y-1 text-[12px]">
-              <Row icon={<Flag size={12} />} label="Fin" value={fmtEta(s.time_left)} />
-              <Row icon={<Clock size={12} />} label="Écoulé" value={fmtDuration(s.print_duration)} />
+              <Row icon={<Flag size={12} />} label="ETA" value={fmtEta(s.time_left)} />
+              <Row icon={<Clock size={12} />} label="Elapsed" value={fmtDuration(s.print_duration)} />
               {s.total_layer != null && (
-                <Row icon={<Layers size={12} />} label="Couche" value={`${s.current_layer ?? "–"} / ${s.total_layer}`} />
+                <Row icon={<Layers size={12} />} label="Layer" value={`${s.current_layer ?? "–"} / ${s.total_layer}`} />
               )}
             </dl>
           )}
           {finished && (
             <div className="mt-1 text-[12px] text-fg-2">
-              {s.print_state === "complete" ? "en " : "après "}
-              {fmtDuration(s.print_duration)} · {fmtFilament(s.filament_used)} de filament
+              {s.print_state === "complete" ? "in " : "after "}
+              {fmtDuration(s.print_duration)} · {fmtFilament(s.filament_used)} of filament
             </div>
           )}
         </div>
@@ -213,18 +213,18 @@ function Row({ icon, label, value }: { icon: ReactNode; label: string; value: st
 function stateLabel(state: string) {
   switch (state) {
     case "printing":
-      return "Impression";
+      return "Printing";
     case "paused":
-      return "En pause";
+      return "Paused";
     case "complete":
-      return "Terminé";
+      return "Done";
     case "cancelled":
-      return "Annulé";
+      return "Cancelled";
     case "error":
-      return "Erreur";
+      return "Error";
     case "standby":
     case "":
-      return "Prête";
+      return "Ready";
     default:
       return state;
   }
@@ -253,7 +253,7 @@ function Temperatures({ printer, snapshot: s }: { printer: PrinterConfig; snapsh
                   <span className={cn("text-[18px] font-semibold tabular-nums tracking-tight", hasTarget ? color : "")}>{fmtTemp(t.temperature)}</span>
                   {hasTarget && <span className="text-[11px] tabular-nums text-fg-3">/ {fmtTemp(t.target!)}</span>}
                   {t.kind === "temperature_fan" && t.speed != null && (
-                    <span className="ml-auto text-[11px] tabular-nums text-fg-3" title="Vitesse du ventilateur">
+                    <span className="ml-auto text-[11px] tabular-nums text-fg-3" title="Fan speed">
                       {Math.round(t.speed * 100)}%
                     </span>
                   )}
@@ -276,12 +276,12 @@ function Temperatures({ printer, snapshot: s }: { printer: PrinterConfig; snapsh
   );
 }
 
-const TARGET_LABELS: Record<string, string> = { extruder: "Buse", heater_bed: "Lit" };
+const TARGET_LABELS: Record<string, string> = { extruder: "Nozzle", heater_bed: "Bed" };
 
 function targetLabel(object: string) {
   if (TARGET_LABELS[object]) return TARGET_LABELS[object];
   const short = object.replace(/^(heater_generic|temperature_fan|extruder)\s*/, "") || object;
-  return short.toLowerCase().includes("chamber") ? "Caisson" : short;
+  return short.toLowerCase().includes("chamber") ? "Chamber" : short;
 }
 
 /** Preheat presets read from Mainsail / Fluidd, plus a cooldown button while anything is heating. */
@@ -338,11 +338,11 @@ function Presets({ printer, snapshot: s }: { printer: PrinterConfig; snapshot: S
           onClick={() => run("cooldown")}
           className="ml-auto rounded-lg bg-surface-3 px-2.5 py-1 text-[12px] font-medium text-chamber transition hover:brightness-110 disabled:opacity-50"
         >
-          {pending === "cooldown" ? <Loader2 size={12} className="inline animate-spin" /> : <Snowflake size={12} className="inline" />} Refroidir
+          {pending === "cooldown" ? <Loader2 size={12} className="inline animate-spin" /> : <Snowflake size={12} className="inline" />} Cool down
         </button>
       )}
       {s.presets.length === 0 && !heating ? null : s.presets.length === 0 ? (
-        <span className="text-[11px] text-fg-3">Aucun preset (à créer dans Mainsail ou Fluidd)</span>
+        <span className="text-[11px] text-fg-3">No presets (create them in Mainsail or Fluidd)</span>
       ) : null}
     </div>
   );
@@ -360,7 +360,7 @@ function Controls({ printer, snapshot: s }: { printer: PrinterConfig; snapshot: 
       <div className="flex items-center gap-2">
         {s.print_state === "paused" ? (
           <Button variant="primary" className="flex-1" icon={<Play size={14} />} disabled={!ready || pending != null} onClick={() => run("resume")}>
-            Reprendre
+            Resume
           </Button>
         ) : (
           <Button variant="primary" className="flex-1" icon={<Pause size={14} />} disabled={!busy || !ready || pending != null} onClick={() => run("pause")}>
@@ -368,8 +368,8 @@ function Controls({ printer, snapshot: s }: { printer: PrinterConfig; snapshot: 
           </Button>
         )}
         <ConfirmButton
-          label="Stop"
-          confirmLabel="Annuler ?"
+          label="Cancel"
+          confirmLabel="Cancel print?"
           icon={<Square size={14} />}
           disabled={!busy || !ready || pending != null}
           onConfirm={() => run("cancel")}
@@ -378,7 +378,7 @@ function Controls({ printer, snapshot: s }: { printer: PrinterConfig; snapshot: 
 
       <div className="flex items-center gap-2 text-[12px]">
         <span className="flex items-center gap-1 text-fg-2">
-          <Gauge size={13} /> Vitesse
+          <Gauge size={13} /> Speed
         </span>
         <div className="flex flex-1 gap-1">
           {SPEEDS.map((pct) => {
@@ -398,7 +398,7 @@ function Controls({ printer, snapshot: s }: { printer: PrinterConfig; snapshot: 
             );
           })}
         </div>
-        <span className="flex items-center gap-1 text-fg-3" title="Ventilateur pièce">
+        <span className="flex items-center gap-1 text-fg-3" title="Part cooling fan">
           <Fan size={13} className={cn(s.fan_speed > 0 && "animate-spin [animation-duration:2s]")} /> {Math.round(s.fan_speed * 100)}%
         </span>
       </div>
@@ -420,7 +420,7 @@ function QuickActions({ printer, snapshot: s }: { printer: PrinterConfig; snapsh
         className="flex-1 whitespace-nowrap"
         icon={homing ? <Loader2 size={14} className="animate-spin" /> : <Home size={14} />}
         disabled={lockMotion}
-        title={busy ? "Indisponible pendant une impression" : "G28 — origine de tous les axes"}
+        title={busy ? "Unavailable while printing" : "G28 — home all axes"}
         onClick={() => run("gcode", "G28")}
       >
         Home
@@ -429,19 +429,19 @@ function QuickActions({ printer, snapshot: s }: { printer: PrinterConfig; snapsh
         className="flex-1 whitespace-nowrap"
         icon={motorsOff ? <Loader2 size={14} className="animate-spin" /> : <Unplug size={14} />}
         disabled={lockMotion}
-        title={busy ? "Indisponible pendant une impression" : "M84 — couper les moteurs"}
+        title={busy ? "Unavailable while printing" : "M84 — disable motors"}
         onClick={() => run("gcode", "M84")}
       >
-        Moteurs
+        Motors off
       </Button>
       <ConfirmButton
         label="Stop"
-        confirmLabel="Sûr ?"
+        confirmLabel="Sure?"
         icon={<AlertTriangle size={14} />}
         disabled={pending === "estop"}
         onConfirm={() => run("estop")}
         className="flex-1 whitespace-nowrap bg-danger text-white hover:bg-danger hover:brightness-110"
-        title="Arrêt d'urgence Klipper (nécessite un Firmware restart ensuite)"
+        title="Klipper emergency stop (needs a firmware restart afterwards)"
       />
     </div>
   );
@@ -475,7 +475,7 @@ function Macros({ printer, snapshot: s }: { printer: PrinterConfig; snapshot: Sn
     return (
       <Card className="flex flex-col gap-2 p-2.5">
         <div className="flex items-center gap-2">
-          <Input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Filtrer les macros…" autoFocus className="h-7" />
+          <Input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Filter macros…" autoFocus className="h-7" />
           <Button size="sm" variant="primary" onClick={() => setEditing(false)}>
             OK
           </Button>
@@ -502,7 +502,7 @@ function Macros({ printer, snapshot: s }: { printer: PrinterConfig; snapshot: Sn
               </button>
             );
           })}
-          {list.length === 0 && <div className="px-2.5 py-3 text-center text-[12px] text-fg-3">Aucune macro</div>}
+          {list.length === 0 && <div className="px-2.5 py-3 text-center text-[12px] text-fg-3">No macros</div>}
         </div>
       </Card>
     );
@@ -515,12 +515,12 @@ function Macros({ printer, snapshot: s }: { printer: PrinterConfig; snapshot: Sn
           <Terminal size={12} /> Macros
         </span>
         <button onClick={() => setEditing(true)} className="rounded px-1.5 py-0.5 text-[11px] text-fg-3 hover:bg-surface-3 hover:text-fg">
-          {pinned.length ? "Modifier" : "Choisir…"}
+          {pinned.length ? "Edit" : "Choose…"}
         </button>
       </div>
       {pinned.length === 0 ? (
         <div className="text-[12px] text-fg-3">
-          {s.macros.length} macro{s.macros.length > 1 ? "s" : ""} disponible{s.macros.length > 1 ? "s" : ""} — choisis celles à afficher ici.
+          {s.macros.length} macro{s.macros.length > 1 ? "s" : ""} available — pick the ones to show here.
         </div>
       ) : (
         <div className="flex flex-wrap gap-1.5">
@@ -622,10 +622,10 @@ function CameraCard({ printer }: { printer: PrinterConfig }) {
     <Card className="overflow-hidden p-0">
       {failed ? (
         <div className="flex items-center justify-center gap-2 py-6 text-[12px] text-fg-3">
-          <Camera size={14} /> Caméra indisponible
+          <Camera size={14} /> Camera unavailable
         </div>
       ) : (
-        <img src={src} alt="Caméra" className="block aspect-video w-full object-cover" onError={() => setFailed(true)} onLoad={() => setFailed(false)} />
+        <img src={src} alt="Camera" className="block aspect-video w-full object-cover" onError={() => setFailed(true)} onLoad={() => setFailed(false)} />
       )}
     </Card>
   );

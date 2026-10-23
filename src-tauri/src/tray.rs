@@ -44,7 +44,7 @@ impl TrayState {
     pub fn empty() -> Self {
         Self {
             title: String::new(),
-            tooltip: "Moonraker Bar — aucune imprimante".into(),
+            tooltip: "Moonraker Bar — no printer".into(),
             progress_pct: None,
             paused: false,
             alert: false,
@@ -71,16 +71,16 @@ impl TrayState {
         };
 
         let tooltip = if offline {
-            format!("{name} — hors ligne")
+            format!("{name} — offline")
         } else if busy {
             let file = s.filename.rsplit('/').next().unwrap_or("");
-            format!("{name} — {} {file}", if paused { "en pause :" } else { "imprime" })
+            format!("{name} — {} {file}", if paused { "paused:" } else { "printing" })
         } else {
             format!("{name} — {}", match s.print_state.as_str() {
-                "complete" => "impression terminée",
-                "cancelled" => "impression annulée",
-                "error" => "erreur",
-                _ => "prête",
+                "complete" => "print finished",
+                "cancelled" => "print cancelled",
+                "error" => "error",
+                _ => "ready",
             })
         };
 
@@ -95,7 +95,7 @@ pub fn fmt_duration(secs: f64) -> String {
     if h > 0 {
         format!("{h}h{m:02}")
     } else {
-        format!("{m}min")
+        format!("{m}m")
     }
 }
 
@@ -104,8 +104,8 @@ pub fn fmt_duration(secs: f64) -> String {
 pub fn setup(app: &AppHandle) -> tauri::Result<()> {
     app.manage(PopoverGuard::new());
 
-    let open = MenuItem::with_id(app, "open", "Ouvrir Moonraker Bar", true, None::<&str>)?;
-    let quit = MenuItem::with_id(app, "quit", "Quitter", true, Some("CmdOrCtrl+Q"))?;
+    let open = MenuItem::with_id(app, "open", "Open Moonraker Bar", true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, "quit", "Quit", true, Some("CmdOrCtrl+Q"))?;
     let sep = PredefinedMenuItem::separator(app)?;
     let menu = Menu::with_items(app, &[&open, &sep, &quit])?;
 

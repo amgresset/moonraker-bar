@@ -48,7 +48,7 @@ export function AfcCard({ printer, snapshot: s, afc }: { printer: PrinterConfig;
         </span>
         <span className="flex items-center gap-2 text-[11px] text-fg-3">
           {printing && afc.number_of_toolchanges > 0 && (
-            <span className="tabular-nums" title="Changements d'outil">
+            <span className="tabular-nums" title="Tool changes">
               {afc.current_toolchange}/{afc.number_of_toolchanges}
             </span>
           )}
@@ -56,7 +56,7 @@ export function AfcCard({ printer, snapshot: s, afc }: { printer: PrinterConfig;
             {working && !afc.error_state && <Loader2 size={11} className="animate-spin" />}
             {stateLabel(afc)}
           </span>
-          <span className="flex items-center gap-1" title={hubLoaded ? "Filament dans le hub" : "Hub vide"}>
+          <span className="flex items-center gap-1" title={hubLoaded ? "Filament in the hub" : "Hub empty"}>
             hub <span className={cn("h-1.5 w-1.5 rounded-full", hubLoaded ? "bg-ok" : "bg-fg-3")} />
           </span>
         </span>
@@ -85,12 +85,12 @@ export function AfcCard({ printer, snapshot: s, afc }: { printer: PrinterConfig;
         <span className="min-w-0 flex-1 truncate text-fg-2">
           {loaded ? (
             <>
-              Chargée : <span className="font-medium text-fg">{loaded.map || loaded.name}</span>
+              Loaded: <span className="font-medium text-fg">{loaded.map || loaded.name}</span>
               {loaded.material ? ` · ${loaded.material}` : ""}
               {loaded.filament_name ? ` · ${loaded.filament_name}` : ""}
             </>
           ) : (
-            "Aucune lane dans l'outil"
+            "No lane in the tool"
           )}
         </span>
         {loaded && (
@@ -100,7 +100,7 @@ export function AfcCard({ printer, snapshot: s, afc }: { printer: PrinterConfig;
             title="TOOL_UNLOAD"
             className="flex items-center gap-1 rounded-md bg-surface-3 px-2 py-1 text-[12px] font-medium text-fg transition hover:brightness-110 disabled:opacity-50"
           >
-            {pending === "gcode:TOOL_UNLOAD" ? <Loader2 size={12} className="animate-spin" /> : <ArrowUpFromLine size={12} />} Décharger
+            {pending === "gcode:TOOL_UNLOAD" ? <Loader2 size={12} className="animate-spin" /> : <ArrowUpFromLine size={12} />} Unload
           </button>
         )}
       </div>
@@ -109,7 +109,7 @@ export function AfcCard({ printer, snapshot: s, afc }: { printer: PrinterConfig;
         <div className={cn("rounded-lg px-2.5 py-1.5 text-[12px]", afc.error_state ? "bg-danger/10 text-danger" : "bg-warn/10 text-warn")}>
           <div className="flex items-start gap-1.5">
             <AlertTriangle size={13} className="mt-0.5 shrink-0" />
-            <span className="min-w-0 flex-1 whitespace-pre-wrap">{afc.message || "AFC en erreur"}</span>
+            <span className="min-w-0 flex-1 whitespace-pre-wrap">{afc.message || "AFC error"}</span>
           </div>
           {afc.error_state && (
             <button
@@ -127,23 +127,23 @@ export function AfcCard({ printer, snapshot: s, afc }: { printer: PrinterConfig;
 }
 
 function stateLabel(afc: AfcState) {
-  if (afc.error_state) return "erreur";
+  if (afc.error_state) return "error";
   switch (afc.current_state) {
     case "Idle":
     case "Initialized":
-      return "prêt";
+      return "ready";
     case "Loading":
-      return `chargement ${afc.current_lane ?? ""}`.trim();
+      return `loading ${afc.current_lane ?? ""}`.trim();
     case "Unloading":
-      return `déchargement ${afc.current_lane ?? ""}`.trim();
+      return `unloading ${afc.current_lane ?? ""}`.trim();
     case "ToolSwap":
-      return "changement d'outil";
+      return "tool change";
     case "Ejecting":
-      return "éjection";
+      return "ejecting";
     case "Moving":
-      return "déplacement";
+      return "moving";
     case "Restoring":
-      return "reprise";
+      return "restoring";
     default:
       return afc.current_state.toLowerCase();
   }
@@ -169,7 +169,7 @@ function LaneChip({
   const color = lane.color && lane.color !== "#000000" ? lane.color : null;
   const tip = [
     lane.name,
-    lane.filament_name || lane.material || "vide",
+    lane.filament_name || lane.material || "empty",
     lane.weight > 0 ? `${Math.round(lane.weight)} g` : null,
     lane.filament_status,
     lane.spool_id != null ? `Spoolman #${lane.spool_id}` : null,
@@ -179,7 +179,7 @@ function LaneChip({
 
   return (
     <button
-      title={armed ? `Charger ${lane.map || lane.name} ?` : tip}
+      title={armed ? `Load ${lane.map || lane.name}?` : tip}
       disabled={disabled}
       onClick={onClick}
       className={cn(
@@ -204,10 +204,10 @@ function LaneChip({
         ) : inTool ? (
           <ArrowDownToLine size={11} className="ml-auto text-accent" />
         ) : prep ? (
-          <span className="ml-auto h-1.5 w-1.5 rounded-full bg-warn" title="Au capteur prep, pas chargée" />
+          <span className="ml-auto h-1.5 w-1.5 rounded-full bg-warn" title="At the prep sensor, not loaded" />
         ) : null}
       </span>
-      <span className="w-full truncate text-[11px] text-fg-2">{armed ? "Charger ?" : empty ? "vide" : lane.material || "—"}</span>
+      <span className="w-full truncate text-[11px] text-fg-2">{armed ? "Load?" : empty ? "empty" : lane.material || "—"}</span>
       {!empty && lane.weight > 0 && <span className="text-[10px] tabular-nums text-fg-3">{Math.round(lane.weight)} g</span>}
     </button>
   );

@@ -36,7 +36,7 @@ export function PrinterSwitcher() {
           >
             {printers.map((p) => {
               const s = snapshots[p.id] ?? EMPTY_SNAPSHOT;
-              const suffix = isBusy(s) ? ` · ${Math.round(s.progress * 100)}%` : s.connection !== "connected" ? " · hors ligne" : "";
+              const suffix = isBusy(s) ? ` · ${Math.round(s.progress * 100)}%` : s.connection !== "connected" ? " · offline" : "";
               return (
                 <option key={p.id} value={p.id}>
                   {p.name}
@@ -52,7 +52,7 @@ export function PrinterSwitcher() {
       )}
       {printers.length > 1 && current && (
         <button
-          title={activeId === current.id ? "Barre de menus : suit automatiquement l'imprimante active" : "Épingler cette imprimante dans la barre de menus"}
+          title={activeId === current.id ? "Menu bar follows the active printer automatically" : "Pin this printer to the menu bar"}
           onClick={() => pin(activeId === current.id ? null : current.id)}
           className={cn(
             "ml-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md transition",

@@ -32,15 +32,15 @@ pub struct PrinterConfig {
 impl PrinterConfig {
     /// Websocket endpoint derived from the HTTP base URL.
     pub fn websocket_url(&self) -> Result<url::Url, String> {
-        let mut u = url::Url::parse(self.url.trim()).map_err(|e| format!("URL invalide: {e}"))?;
+        let mut u = url::Url::parse(self.url.trim()).map_err(|e| format!("Invalid URL: {e}"))?;
         let scheme = match u.scheme() {
             "http" => "ws",
             "https" => "wss",
             "ws" | "wss" => u.scheme(),
-            other => return Err(format!("Schéma non supporté: {other}")),
+            other => return Err(format!("Unsupported scheme: {other}")),
         }
         .to_string();
-        u.set_scheme(&scheme).map_err(|_| "Schéma non supporté".to_string())?;
+        u.set_scheme(&scheme).map_err(|_| "Unsupported scheme".to_string())?;
         u.set_path("/websocket");
         u.set_query(None);
         Ok(u)

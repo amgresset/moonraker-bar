@@ -107,15 +107,15 @@ impl Rpc {
             let mut sink = self.sink.lock().await;
             sink.send(Message::Text(msg.to_string().into()))
                 .await
-                .map_err(|e| format!("Envoi impossible: {e}"))?;
+                .map_err(|e| format!("Send failed: {e}"))?;
         }
 
         match tokio::time::timeout(timeout, rx).await {
             Ok(Ok(res)) => res,
-            Ok(Err(_)) => Err("Connexion fermée".to_string()),
+            Ok(Err(_)) => Err("Connection closed".to_string()),
             Err(_) => {
                 self.pending.lock().await.remove(&id);
-                Err(format!("Délai dépassé ({method})"))
+                Err(format!("Timed out ({method})"))
             }
         }
     }
@@ -126,9 +126,9 @@ async fn read_loop(mut stream: WsStream, pending: Pending, notif: mpsc::Sender<(
     while let Some(item) = stream.next().await {
         let text = match item {
             Ok(Message::Text(t)) => t.to_string(),
-            Ok(Message::Close(_)) => return "Fermé par le serveur".to_string(),
+            Ok(Message::Close(_)) => return "Closed by server".to_string(),
             Ok(_) => continue,
-            Err(e) => return format!("Erreur websocket: {e}"),
+            Err(e) => return format!("Websocket error: {e}"),
         };
         let msg: Value = match serde_json::from_str(&text) {
             Ok(v) => v,
@@ -140,7 +140,7 @@ async fn read_loop(mut stream: WsStream, pending: Pending, notif: mpsc::Sender<(
                     let message = err
                         .get("message")
                         .and_then(Value::as_str)
-                        .unwrap_or("Erreur Moonraker");
+                        .unwrap_or("Moonraker error");
                     Err(message.to_string())
                 } else {
                     Ok(msg.get("result").cloned().unwrap_or(Value::Null))
@@ -150,11 +150,11 @@ async fn read_loop(mut stream: WsStream, pending: Pending, notif: mpsc::Sender<(
         } else if let Some(method) = msg.get("method").and_then(Value::as_str) {
             let params = msg.get("params").cloned().unwrap_or(Value::Null);
             if notif.send((method.to_string(), params)).await.is_err() {
-                return "Session terminée".to_string();
+                return "Session ended".to_string();
             }
         }
     }
-    "Connexion perdue".to_string()
+    "Connection lost".to_string()
 }
 
 async fn connect(cfg: &PrinterConfig) -> Result<Ws, String> {
@@ -162,15 +162,15 @@ async fn connect(cfg: &PrinterConfig) -> Result<Ws, String> {
     let mut req = ws_url
         .as_str()
         .into_client_request()
-        .map_err(|e| format!("Requête invalide: {e}"))?;
+        .map_err(|e| format!("Invalid request: {e}"))?;
     if let Some(key) = cfg.api_key.as_deref().map(str::trim).filter(|k| !k.is_empty()) {
-        let value = HeaderValue::from_str(key).map_err(|_| "Clé API invalide".to_string())?;
+        let value = HeaderValue::from_str(key).map_err(|_| "Invalid API key".to_string())?;
         req.headers_mut().insert("X-Api-Key", value);
     }
     let (ws, _) = tokio::time::timeout(CONNECT_TIMEOUT, tokio_tungstenite::connect_async(req))
         .await
-        .map_err(|_| "Délai de connexion dépassé".to_string())?
-        .map_err(|e| format!("Connexion impossible: {e}"))?;
+        .map_err(|_| "Connection timed out".to_string())?
+        .map_err(|e| format!("Cannot connect: {e}"))?;
     Ok(ws)
 }
 
@@ -383,9 +383,9 @@ async fn execute(rpc: Rpc, snapshot: Arc<RwLock<Snapshot>>, action: Action) -> R
                 let s = snapshot.read().await;
                 s.presets.iter().find(|p| p.id == id).map(Preset::to_gcode)
             };
-            let Some(script) = script else { return Err("Preset introuvable".into()) };
+            let Some(script) = script else { return Err("Preset not found".into()) };
             if script.is_empty() {
-                return Err("Preset vide".into());
+                return Err("Empty preset".into());
             }
             rpc.call_with_timeout("printer.gcode.script", json!({ "script": script }), GCODE_TIMEOUT).await
         }
@@ -557,7 +557,7 @@ pub async fn run(
                 _ = &mut sleep => break,
                 _ = stop.changed() => return,
                 cmd = cmd_rx.recv() => match cmd {
-                    Some(c) => { let _ = c.reply.send(Err("Imprimante hors ligne".into())); }
+                    Some(c) => { let _ = c.reply.send(Err("Printer offline".into())); }
                     None => return,
                 },
             }
@@ -607,11 +607,11 @@ async fn session(
             tokio::select! {
                 _ = stop.changed() => return Ok(()),
                 res = &mut reader => {
-                    return Err(res.unwrap_or_else(|_| "Lecteur interrompu".into()));
+                    return Err(res.unwrap_or_else(|_| "Reader stopped".into()));
                 }
                 notif = notif_rx.recv() => match notif {
                     Some((method, params)) => sess.handle_notification(&method, &params).await,
-                    None => return Err("Connexion perdue".into()),
+                    None => return Err("Connection lost".into()),
                 },
                 cmd = cmd_rx.recv() => match cmd {
                     Some(c) => {
@@ -669,7 +669,7 @@ pub async fn probe(cfg: &PrinterConfig) -> Result<String, String> {
             .await
             .ok()
             .and_then(|p| p.get("hostname").and_then(Value::as_str).map(str::to_string))
-            .unwrap_or_else(|| "inconnu".to_string());
+            .unwrap_or_else(|| "unknown".to_string());
         Ok::<String, String>(format!("{hostname} (Klippy: {klippy})"))
     }
     .await;

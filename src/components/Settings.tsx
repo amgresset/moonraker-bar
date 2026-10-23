@@ -16,10 +16,10 @@ export function Settings() {
     <div className="flex flex-col gap-3">
       <section>
         <div className="mb-1.5 flex items-center justify-between">
-          <h2 className="text-[11px] font-medium uppercase tracking-wide text-fg-2">Imprimantes</h2>
+          <h2 className="text-[11px] font-medium uppercase tracking-wide text-fg-2">Printers</h2>
           {editing === null && (
             <Button size="sm" variant="ghost" icon={<Plus size={13} />} onClick={() => setEditing("new")}>
-              Ajouter
+              Add
             </Button>
           )}
         </div>
@@ -30,7 +30,7 @@ export function Settings() {
             onDone={() => setEditing(null)}
           />
         ) : printers.length === 0 ? (
-          <Card className="py-6 text-center text-[12px] text-fg-3">Aucune imprimante.</Card>
+          <Card className="py-6 text-center text-[12px] text-fg-3">No printers yet.</Card>
         ) : (
           <Card className="divide-y divide-line p-0">
             {printers.map((p) => {
@@ -46,7 +46,7 @@ export function Settings() {
                       {s?.hostname ? ` · ${s.hostname}` : ""}
                     </div>
                   </div>
-                  <IconButton title="Modifier" onClick={() => setEditing(p)}>
+                  <IconButton title="Edit" onClick={() => setEditing(p)}>
                     <Pencil size={13} />
                   </IconButton>
                   <DeleteButton id={p.id} />
@@ -59,7 +59,7 @@ export function Settings() {
 
       {printers.length > 0 && editing === null && (
         <section>
-          <h2 className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-fg-2">Températures affichées</h2>
+          <h2 className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-fg-2">Temperature tiles</h2>
           <div className="flex flex-col gap-2">
             {printers.map((p) => (
               <TempPicker key={p.id} printer={p} snapshot={snapshots[p.id]} />
@@ -69,7 +69,7 @@ export function Settings() {
       )}
 
       <section>
-        <h2 className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-fg-2">Général</h2>
+        <h2 className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-fg-2">General</h2>
         <Card className="p-0">
           <AutostartRow />
         </Card>
@@ -87,7 +87,7 @@ function DeleteButton({ id }: { id: string }) {
   }, [armed]);
   return (
     <IconButton
-      title={armed ? "Confirmer la suppression" : "Supprimer"}
+      title={armed ? "Confirm removal" : "Remove"}
       className={cn(armed && "bg-danger/15 text-danger hover:bg-danger/25 hover:text-danger")}
       onClick={async () => {
         if (!armed) return setArmed(true);
@@ -150,19 +150,19 @@ function PrinterForm({ initial, onDone }: { initial: PrinterConfig | null; onDon
   return (
     <Card>
       <form onSubmit={submit} className="flex flex-col gap-2.5">
-        <Field label="Nom">
+        <Field label="Name">
           <Input value={form.name} onChange={set("name")} placeholder="Voron 2.4" autoFocus />
         </Field>
-        <Field label="URL Moonraker" hint="http://imprimante.local:7125 — ou l'URL de Mainsail/Fluidd si Moonraker est derrière nginx.">
+        <Field label="Moonraker URL" hint="http://printer.local:7125 — or the Mainsail/Fluidd URL when Moonraker sits behind nginx.">
           <Input value={form.url} onChange={set("url")} placeholder="http://voron.local:7125" required spellCheck={false} />
         </Field>
-        <Field label="Clé API" hint="Facultative sauf si l'authentification est activée dans Moonraker.">
+        <Field label="API key" hint="Optional unless authentication is enabled in Moonraker.">
           <Input value={form.api_key ?? ""} onChange={set("api_key")} placeholder="—" spellCheck={false} />
         </Field>
-        <Field label="Interface web" hint="Mainsail ou Fluidd. Vide = même hôte que Moonraker sans le port.">
+        <Field label="Web UI" hint="Mainsail or Fluidd. Empty = the Moonraker host without its port.">
           <Input value={form.web_url ?? ""} onChange={set("web_url")} placeholder="http://voron.local" spellCheck={false} />
         </Field>
-        <Field label="Snapshot caméra" hint="Absolue, ou relative à l'URL Moonraker, ex. /webcam/?action=snapshot">
+        <Field label="Camera snapshot" hint="Absolute, or relative to the Moonraker URL, e.g. /webcam/?action=snapshot">
           <Input value={form.camera_url ?? ""} onChange={set("camera_url")} placeholder="/webcam/?action=snapshot" spellCheck={false} />
         </Field>
 
@@ -174,14 +174,14 @@ function PrinterForm({ initial, onDone }: { initial: PrinterConfig | null; onDon
 
         <div className="flex items-center gap-2 pt-1">
           <Button type="button" size="sm" variant="ghost" icon={testing ? <Loader2 size={13} className="animate-spin" /> : <Wifi size={13} />} disabled={testing} onClick={test}>
-            Tester
+            Test
           </Button>
           <div className="flex-1" />
           <Button type="button" size="sm" variant="ghost" onClick={onDone}>
-            Annuler
+            Cancel
           </Button>
           <Button type="submit" size="sm" variant="primary" disabled={saving}>
-            {initial ? "Enregistrer" : "Ajouter"}
+            {initial ? "Save" : "Add"}
           </Button>
         </div>
       </form>
@@ -220,13 +220,13 @@ function TempPicker({ printer, snapshot }: { printer: PrinterConfig; snapshot: S
         <span className="truncate font-medium">{printer.name}</span>
         {!isDefault && (
           <button onClick={reset} className="text-[11px] text-fg-3 hover:text-fg">
-            Par défaut
+            Default
           </button>
         )}
       </div>
       {all.length === 0 ? (
         <div className="text-[12px] text-fg-3">
-          {snapshot?.connection === "connected" ? "Aucun capteur détecté." : "Connecte l'imprimante pour lister ses capteurs."}
+          {snapshot?.connection === "connected" ? "No sensors found." : "Connect the printer to list its sensors."}
         </div>
       ) : (
         <div className="flex flex-wrap gap-1.5">
@@ -275,8 +275,8 @@ function AutostartRow() {
   return (
     <button type="button" onClick={toggle} className="flex w-full items-center justify-between px-3 py-2 text-left hover:bg-surface-3/60">
       <div>
-        <div className="font-medium">Lancer au démarrage</div>
-        <div className="text-[11px] text-fg-3">Démarre discrètement dans la barre de menus.</div>
+        <div className="font-medium">Launch at login</div>
+        <div className="text-[11px] text-fg-3">Starts quietly in the menu bar.</div>
       </div>
       <Toggle on={enabled === true} />
     </button>

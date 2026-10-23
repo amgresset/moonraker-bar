@@ -44,17 +44,17 @@ function FleetRow({
 
   const subtitle = !online
     ? s.connection === "connecting"
-      ? "Connexion…"
-      : "Hors ligne"
+      ? "Connecting…"
+      : "Offline"
     : alert
-      ? "Klipper en erreur"
+      ? "Klipper error"
       : busy
         ? fmtFilename(s.filename)
         : s.print_state === "complete"
-          ? `Terminé · ${fmtFilename(s.filename)}`
-          : "Prête";
+          ? `Done · ${fmtFilename(s.filename)}`
+          : "Ready";
 
-  const detail = online && busy ? (s.time_left != null ? `${fmtDuration(s.time_left)} restant` : "estimation…") : online ? `${fmtTemp(s.extruder.temperature)} · ${fmtTemp(s.bed.temperature)}` : "";
+  const detail = online && busy ? (s.time_left != null ? `${fmtDuration(s.time_left)} left` : "estimating…") : online ? `${fmtTemp(s.extruder.temperature)} · ${fmtTemp(s.bed.temperature)}` : "";
 
   return (
     <Card className={cn("group flex items-center gap-3 p-2.5 transition hover:bg-surface-3/50", !online && "opacity-70")}>
@@ -69,14 +69,14 @@ function FleetRow({
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
             <span className="truncate text-[13px] font-semibold tracking-tight">{printer.name}</span>
-            {paused && <span className="rounded-full bg-warn/15 px-1.5 text-[10px] font-medium text-warn">pause</span>}
+            {paused && <span className="rounded-full bg-warn/15 px-1.5 text-[10px] font-medium text-warn">paused</span>}
           </div>
           <div className={cn("truncate text-[12px]", alert ? "text-danger" : "text-fg-2")}>{subtitle}</div>
           {detail && <div className="truncate text-[11px] tabular-nums text-fg-3">{detail}</div>}
         </div>
       </button>
       <button
-        title={pinned ? "La barre de menus suit cette imprimante" : "Épingler dans la barre de menus"}
+        title={pinned ? "The menu bar follows this printer" : "Pin to the menu bar"}
         onClick={onPin}
         className={cn(
           "inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md transition",

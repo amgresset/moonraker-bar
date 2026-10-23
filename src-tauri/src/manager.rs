@@ -140,7 +140,7 @@ impl Manager {
             let idx = printers
                 .iter()
                 .position(|h| h.cfg.id == cfg.id)
-                .ok_or_else(|| "Imprimante inconnue".to_string())?;
+                .ok_or_else(|| "Unknown printer".to_string())?;
             (printers.remove(idx), idx)
         };
         let _ = old.stop.send(true);
@@ -171,7 +171,7 @@ impl Manager {
             let idx = printers
                 .iter()
                 .position(|h| h.cfg.id == id)
-                .ok_or_else(|| "Imprimante inconnue".to_string())?;
+                .ok_or_else(|| "Unknown printer".to_string())?;
             printers.remove(idx)
         };
         let _ = removed.stop.send(true);
@@ -195,7 +195,7 @@ impl Manager {
             let h = printers
                 .iter_mut()
                 .find(|h| h.cfg.id == id)
-                .ok_or_else(|| "Imprimante inconnue".to_string())?;
+                .ok_or_else(|| "Unknown printer".to_string())?;
             h.cfg.pinned_macros = macros;
         }
         self.persist().await;
@@ -210,7 +210,7 @@ impl Manager {
             let h = printers
                 .iter_mut()
                 .find(|h| h.cfg.id == id)
-                .ok_or_else(|| "Imprimante inconnue".to_string())?;
+                .ok_or_else(|| "Unknown printer".to_string())?;
             h.cfg.shown_temps = objects;
         }
         self.persist().await;
@@ -235,16 +235,16 @@ impl Manager {
                 .iter()
                 .find(|h| h.cfg.id == id)
                 .map(|h| h.cmd_tx.clone())
-                .ok_or_else(|| "Imprimante inconnue".to_string())?
+                .ok_or_else(|| "Unknown printer".to_string())?
         };
         let (reply_tx, reply_rx) = oneshot::channel();
         cmd_tx
             .send(Command { action, reply: reply_tx })
             .await
-            .map_err(|_| "Imprimante arrêtée".to_string())?;
+            .map_err(|_| "Printer stopped".to_string())?;
         reply_rx
             .await
-            .map_err(|_| "Pas de réponse".to_string())?
+            .map_err(|_| "No reply".to_string())?
             .map(|_| ())
     }
 
@@ -285,18 +285,18 @@ impl Manager {
         }
         let file = update.snapshot.filename.rsplit('/').next().unwrap_or("").to_string();
         let body = match (prev.as_str(), new_state.as_str()) {
-            ("printing", "complete") => Some(format!("Impression terminée : {file}")),
-            ("printing" | "paused", "error") => Some(format!("Erreur d'impression : {file}")),
-            ("printing" | "paused", "cancelled") => Some(format!("Impression annulée : {file}")),
+            ("printing", "complete") => Some(format!("Print finished: {file}")),
+            ("printing" | "paused", "error") => Some(format!("Print error: {file}")),
+            ("printing" | "paused", "cancelled") => Some(format!("Print cancelled: {file}")),
             ("printing", "paused") => {
                 let why = update.snapshot.message.trim();
                 Some(if why.is_empty() {
-                    format!("Impression en pause : {file}")
+                    format!("Print paused: {file}")
                 } else {
-                    format!("En pause — {why}")
+                    format!("Paused — {why}")
                 })
             }
-            (_, "printing") if prev != "paused" => Some(format!("Impression lancée : {file}")),
+            (_, "printing") if prev != "paused" => Some(format!("Print started: {file}")),
             _ => None,
         };
         if let Some(body) = body {

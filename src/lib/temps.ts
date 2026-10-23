@@ -2,11 +2,11 @@ import type { PrinterConfig, Snapshot, TempReading } from "./types";
 
 /** Display name for a Klipper temperature object. */
 export function tempLabel(object: string): string {
-  if (object === "extruder") return "Buse";
-  if (/^extruder\d+$/.test(object)) return `Buse ${Number(object.slice(8)) + 1}`;
-  if (object === "heater_bed") return "Lit";
+  if (object === "extruder") return "Nozzle";
+  if (/^extruder\d+$/.test(object)) return `Nozzle ${Number(object.slice(8)) + 1}`;
+  if (object === "heater_bed") return "Bed";
   const name = object.split(" ").slice(1).join(" ") || object;
-  if (/chamber|caisson/i.test(name)) return "Caisson";
+  if (/chamber/i.test(name)) return "Chamber";
   return name.replace(/[_-]+/g, " ").replace(/^\w/, (c) => c.toUpperCase());
 }
 

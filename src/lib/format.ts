@@ -14,7 +14,7 @@ export function fmtDuration(seconds: number | null | undefined): string {
   return "<1 min";
 }
 
-/** Clock time `seconds` from now, e.g. "14:37" (or "demain 08:12"). */
+/** Clock time `seconds` from now, e.g. "14:37" (or "tomorrow 08:12"). */
 export function fmtEta(seconds: number | null | undefined): string {
   if (seconds == null || !Number.isFinite(seconds)) return "—";
   const eta = new Date(Date.now() + seconds * 1000);
@@ -24,7 +24,7 @@ export function fmtEta(seconds: number | null | undefined): string {
   if (sameDay) return time;
   const tomorrow = new Date(today);
   tomorrow.setDate(today.getDate() + 1);
-  if (eta.toDateString() === tomorrow.toDateString()) return `demain ${time}`;
+  if (eta.toDateString() === tomorrow.toDateString()) return `tomorrow ${time}`;
   return eta.toLocaleDateString([], { weekday: "short" }) + " " + time;
 }
 

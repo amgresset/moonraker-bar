@@ -30,7 +30,7 @@ impl PrinterInput {
         let name = self.name.trim().to_string();
         let url = self.url.trim().trim_end_matches('/').to_string();
         if url.is_empty() {
-            return Err("L'URL Moonraker est requise".into());
+            return Err("Moonraker URL is required".into());
         }
         let cfg = PrinterConfig {
             id,
@@ -126,20 +126,20 @@ pub async fn printer_action(
             let pct: u32 = arg
                 .as_deref()
                 .and_then(|s| s.trim().parse().ok())
-                .ok_or_else(|| "Pourcentage invalide".to_string())?;
+                .ok_or_else(|| "Invalid percentage".to_string())?;
             Action::Gcode(format!("M220 S{}", pct.clamp(10, 500)))
         }
         "gcode" => {
             let script = arg.unwrap_or_default();
             if script.trim().is_empty() {
-                return Err("Script vide".into());
+                return Err("Empty script".into());
             }
             Action::Gcode(script)
         }
         "preset" => Action::ApplyPreset(arg.unwrap_or_default()),
         "cooldown" => Action::Cooldown,
         "reload_presets" => Action::ReloadPresets,
-        other => return Err(format!("Action inconnue: {other}")),
+        other => return Err(format!("Unknown action: {other}")),
     };
     mgr.execute(&id, action).await
 }

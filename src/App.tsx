@@ -54,7 +54,7 @@ export default function App() {
   }, []);
 
   const multi = printers.length > 1;
-  const title = view === "settings" ? "Réglages" : view === "fleet" ? "Imprimantes" : null;
+  const title = view === "settings" ? "Settings" : view === "fleet" ? "Printers" : null;
 
   return (
     <div
@@ -69,7 +69,7 @@ export default function App() {
         {view === "panel" ? (
           <>
             {multi && (
-              <IconButton title="Toutes les imprimantes" onClick={() => setView("fleet")} className="-ml-1 mr-0.5">
+              <IconButton title="All printers" onClick={() => setView("fleet")} className="-ml-1 mr-0.5">
                 <ChevronLeft size={15} />
               </IconButton>
             )}
@@ -79,16 +79,16 @@ export default function App() {
           <div className="flex-1 text-[15px] font-semibold tracking-tight">{title}</div>
         )}
         {view === "panel" && webUi && (
-          <IconButton title={`Ouvrir ${webUi}`} onClick={() => openUrl(webUi).catch((e) => setError(String(e)))}>
+          <IconButton title={`Open ${webUi}`} onClick={() => openUrl(webUi).catch((e) => setError(String(e)))}>
             <ExternalLink size={15} />
           </IconButton>
         )}
         {view === "settings" ? (
-          <IconButton title="Retour" onClick={() => setView(multi ? "fleet" : "panel")}>
+          <IconButton title="Back" onClick={() => setView(multi ? "fleet" : "panel")}>
             <X size={15} />
           </IconButton>
         ) : (
-          <IconButton title="Réglages" onClick={() => setView("settings")}>
+          <IconButton title="Settings" onClick={() => setView("settings")}>
             <SettingsIcon size={15} />
           </IconButton>
         )}
@@ -96,7 +96,7 @@ export default function App() {
 
       <main className="min-h-0 flex-1 overflow-y-auto px-3 pb-3">
         {!ready ? (
-          <div className="py-10 text-center text-fg-2">Chargement…</div>
+          <div className="py-10 text-center text-fg-2">Loading…</div>
         ) : view === "panel" ? (
           <PrinterPanel />
         ) : view === "fleet" ? (
@@ -120,9 +120,9 @@ export default function App() {
         <button
           className="flex items-center gap-1 rounded px-1.5 py-0.5 hover:bg-surface-3 hover:text-fg"
           onClick={() => backend.quit()}
-          title="Quitter"
+          title="Quit"
         >
-          <Power size={11} /> Quitter
+          <Power size={11} /> Quit
         </button>
       </footer>
     </div>
