@@ -3,8 +3,9 @@ import { Plus, Trash2, Pencil, Wifi, Check, Loader2 } from "lucide-react";
 import { enable, disable, isEnabled } from "@tauri-apps/plugin-autostart";
 import { useStore } from "@/store";
 import { backend } from "@/lib/backend";
-import type { PrinterConfig, PrinterInput } from "@/lib/types";
+import type { PrinterConfig, PrinterInput, Snapshot } from "@/lib/types";
 import { cn } from "@/lib/format";
+import { defaultTemps, tempColor, tempLabel } from "@/lib/temps";
 import { Button, Card, Field, IconButton, Input } from "./ui";
 
 export function Settings() {
@@ -55,6 +56,17 @@ export function Settings() {
           </Card>
         )}
       </section>
+
+      {printers.length > 0 && editing === null && (
+        <section>
+          <h2 className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-fg-2">Températures affichées</h2>
+          <div className="flex flex-col gap-2">
+            {printers.map((p) => (
+              <TempPicker key={p.id} printer={p} snapshot={snapshots[p.id]} />
+            ))}
+          </div>
+        </section>
+      )}
 
       <section>
         <h2 className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-fg-2">Général</h2>
@@ -173,6 +185,74 @@ function PrinterForm({ initial, onDone }: { initial: PrinterConfig | null; onDon
           </Button>
         </div>
       </form>
+    </Card>
+  );
+}
+
+/** Per-printer checklist of every heater / sensor / temperature fan Klipper reports. */
+function TempPicker({ printer, snapshot }: { printer: PrinterConfig; snapshot: Snapshot | undefined }) {
+  const all = snapshot?.temperatures ?? [];
+  const chosen = printer.shown_temps.length ? printer.shown_temps : defaultTemps(all);
+  const isDefault = printer.shown_temps.length === 0;
+
+  const toggle = async (object: string) => {
+    const next = chosen.includes(object) ? chosen.filter((o) => o !== object) : [...chosen, object];
+    // Keep the printer's discovery order so tiles don't jump around.
+    const ordered = all.map((t) => t.object).filter((o) => next.includes(o));
+    try {
+      await backend.setShownTemps(printer.id, ordered);
+    } catch (e) {
+      useStore.getState().setError(String(e));
+    }
+  };
+
+  const reset = async () => {
+    try {
+      await backend.setShownTemps(printer.id, []);
+    } catch (e) {
+      useStore.getState().setError(String(e));
+    }
+  };
+
+  return (
+    <Card className="flex flex-col gap-2 p-2.5">
+      <div className="flex items-center justify-between">
+        <span className="truncate font-medium">{printer.name}</span>
+        {!isDefault && (
+          <button onClick={reset} className="text-[11px] text-fg-3 hover:text-fg">
+            Par défaut
+          </button>
+        )}
+      </div>
+      {all.length === 0 ? (
+        <div className="text-[12px] text-fg-3">
+          {snapshot?.connection === "connected" ? "Aucun capteur détecté." : "Connecte l'imprimante pour lister ses capteurs."}
+        </div>
+      ) : (
+        <div className="flex flex-wrap gap-1.5">
+          {all.map((t) => {
+            const on = chosen.includes(t.object);
+            return (
+              <button
+                key={t.object}
+                onClick={() => toggle(t.object)}
+                title={`${t.object} · ${Math.round(t.temperature)}°`}
+                className={cn(
+                  "flex items-center gap-1.5 rounded-lg border px-2 py-1 text-[12px] transition",
+                  on ? "border-accent/60 bg-accent/10 text-fg" : "border-line bg-surface-3/40 text-fg-2 hover:text-fg",
+                )}
+              >
+                <span className={cn("flex h-3.5 w-3.5 items-center justify-center rounded border", on ? "border-accent bg-accent text-accent-fg" : "border-fg/25")}>
+                  {on && <Check size={10} />}
+                </span>
+                <span className={cn("h-1.5 w-1.5 rounded-full bg-current", tempColor(t))} />
+                {tempLabel(t.object)}
+                <span className="tabular-nums text-fg-3">{Math.round(t.temperature)}°</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
     </Card>
   );
 }

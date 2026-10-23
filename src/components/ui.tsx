@@ -86,9 +86,11 @@ export function Field({ label, hint, children }: { label: string; hint?: string;
   );
 }
 
-export function Card({ className, children }: { className?: string; children: ReactNode }) {
+export function Card({ className, children, title }: { className?: string; children: ReactNode; title?: string }) {
   return (
-    <div className={cn("rounded-xl border border-line bg-surface-2 p-3", className)}>{children}</div>
+    <div className={cn("rounded-xl border border-line bg-surface-2 p-3", className)} title={title}>
+      {children}
+    </div>
   );
 }
 

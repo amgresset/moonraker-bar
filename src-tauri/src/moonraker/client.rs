@@ -21,7 +21,7 @@ use tokio_tungstenite::tungstenite::http::HeaderValue;
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 
-use super::model::{AfcKeys, ConnectionState, MacroInfo, Preset, PresetTarget, PrinterConfig, PrinterUpdate, Snapshot};
+use super::model::{AfcKeys, ConnectionState, MacroInfo, Preset, PresetTarget, PrinterConfig, PrinterUpdate, Snapshot, TempReading};
 
 type Ws = WebSocketStream<MaybeTlsStream<TcpStream>>;
 type WsSink = SplitSink<Ws, Message>;
@@ -38,7 +38,7 @@ const KEEPALIVE: Duration = Duration::from_secs(20);
 const MAX_BACKOFF_SECS: u64 = 15;
 
 /// Printer objects we subscribe to. `None` means "every field".
-fn subscription_objects(chamber_key: Option<&str>, afc: Option<&AfcKeys>) -> Value {
+fn subscription_objects(chamber_key: Option<&str>, afc: Option<&AfcKeys>, temps: &[TempReading]) -> Value {
     let mut objects = json!({
         "webhooks": null,
         "print_stats": null,
@@ -54,6 +54,9 @@ fn subscription_objects(chamber_key: Option<&str>, afc: Option<&AfcKeys>) -> Val
     }
     if let Some(afc) = afc {
         afc.subscription(&mut objects);
+    }
+    for t in temps {
+        objects[&t.object] = TempReading::fields(&t.kind);
     }
     objects
 }
@@ -237,14 +240,28 @@ impl Session {
             self.snapshot.write().await.afc = None;
         }
 
+        // Every temperature-bearing object, so the user can pick which tiles to show.
+        let temps: Vec<TempReading> = objects
+            .iter()
+            .filter_map(|o| {
+                TempReading::is_temperature_object(o).map(|kind| TempReading {
+                    object: o.clone(),
+                    kind: kind.to_string(),
+                    ..Default::default()
+                })
+            })
+            .collect();
+        self.snapshot.write().await.temperatures = temps;
+
         self.discover_macros(&objects).await;
         load_presets(&self.rpc, &self.snapshot).await;
 
+        let temps = self.snapshot.read().await.temperatures.clone();
         let res = self
             .rpc
             .call(
                 "printer.objects.subscribe",
-                json!({ "objects": subscription_objects(self.chamber_key.as_deref(), self.afc_keys.as_ref()) }),
+                json!({ "objects": subscription_objects(self.chamber_key.as_deref(), self.afc_keys.as_ref(), &temps) }),
             )
             .await?;
         if let Some(status) = res.get("status") {

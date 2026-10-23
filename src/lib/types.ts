@@ -8,6 +8,18 @@ export interface PrinterConfig {
   camera_url?: string;
   web_url?: string;
   pinned_macros: string[];
+  shown_temps: string[];
+}
+
+export type TempKind = "extruder" | "heater_bed" | "heater_generic" | "temperature_sensor" | "temperature_fan";
+
+export interface TempReading {
+  object: string;
+  kind: TempKind;
+  temperature: number;
+  target: number | null;
+  power: number | null;
+  speed: number | null;
 }
 
 export interface MacroInfo {
@@ -136,6 +148,7 @@ export interface Snapshot {
   presets: Preset[];
   cooldown_gcode: string;
   afc: AfcState | null;
+  temperatures: TempReading[];
   last_update: number;
   last_error: string | null;
 }
@@ -186,6 +199,7 @@ export const EMPTY_SNAPSHOT: Snapshot = {
   presets: [],
   cooldown_gcode: "",
   afc: null,
+  temperatures: [],
   last_update: 0,
   last_error: null,
 };

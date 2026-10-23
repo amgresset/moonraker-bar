@@ -24,6 +24,9 @@ pub struct PrinterConfig {
     /// Klipper macros shown as buttons in the panel, in display order.
     #[serde(default)]
     pub pinned_macros: Vec<String>,
+    /// Temperature objects shown as tiles, in display order. Empty = sensible default.
+    #[serde(default)]
+    pub shown_temps: Vec<String>,
 }
 
 impl PrinterConfig {
@@ -119,6 +122,49 @@ impl Preset {
             lines.push(extra.to_string());
         }
         lines.join("\n")
+    }
+}
+
+/// One heater, sensor or temperature fan, as discovered on the printer.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+pub struct TempReading {
+    /// Klipper object: `extruder`, `heater_bed`, `heater_generic chamber`, `temperature_sensor mcu`…
+    pub object: String,
+    /// `extruder` | `heater_bed` | `heater_generic` | `temperature_sensor` | `temperature_fan`.
+    pub kind: String,
+    pub temperature: f64,
+    /// Heaters and temperature fans only.
+    pub target: Option<f64>,
+    /// Heaters only, 0..1.
+    pub power: Option<f64>,
+    /// Temperature fans only, 0..1.
+    pub speed: Option<f64>,
+}
+
+impl TempReading {
+    pub fn is_temperature_object(object: &str) -> Option<&'static str> {
+        if object == "extruder" || (object.starts_with("extruder") && object[8..].chars().all(|c| c.is_ascii_digit())) {
+            Some("extruder")
+        } else if object == "heater_bed" {
+            Some("heater_bed")
+        } else if object.starts_with("heater_generic ") {
+            Some("heater_generic")
+        } else if object.starts_with("temperature_sensor ") {
+            Some("temperature_sensor")
+        } else if object.starts_with("temperature_fan ") {
+            Some("temperature_fan")
+        } else {
+            None
+        }
+    }
+
+    /// Fields to subscribe for this kind of object.
+    pub fn fields(kind: &str) -> Value {
+        match kind {
+            "temperature_sensor" => json!(["temperature"]),
+            "temperature_fan" => json!(["temperature", "target", "speed"]),
+            _ => json!(["temperature", "target", "power"]),
+        }
     }
 }
 
@@ -410,6 +456,8 @@ pub struct Snapshot {
     pub cooldown_gcode: String,
     /// Present when the AFC add-on is installed on the printer.
     pub afc: Option<AfcState>,
+    /// Every heater / sensor / temperature fan on the printer, in discovery order.
+    pub temperatures: Vec<TempReading>,
     /// Unix epoch, milliseconds.
     pub last_update: u64,
     pub last_error: Option<String>,
@@ -449,6 +497,20 @@ impl Snapshot {
     pub fn apply_status(&mut self, status: &Value, chamber_key: Option<&str>, afc_keys: Option<&AfcKeys>) {
         if let Some(keys) = afc_keys {
             self.afc.get_or_insert_with(AfcState::default).apply(status, keys);
+        }
+        for reading in &mut self.temperatures {
+            if let Some(v) = status.get(&reading.object) {
+                set_f64(&mut reading.temperature, v.get("temperature"));
+                if let Some(t) = v.get("target").and_then(Value::as_f64) {
+                    reading.target = Some(t);
+                }
+                if let Some(p) = v.get("power").and_then(Value::as_f64) {
+                    reading.power = Some(p);
+                }
+                if let Some(sp) = v.get("speed").and_then(Value::as_f64) {
+                    reading.speed = Some(sp);
+                }
+            }
         }
         if let Some(w) = status.get("webhooks") {
             set_str(&mut self.klippy_state, w.get("state"));

@@ -24,6 +24,7 @@ import { useStore, useSelectedPrinter } from "@/store";
 import { backend } from "@/lib/backend";
 import { isBusy, type PrinterConfig, type Snapshot } from "@/lib/types";
 import { useAction } from "@/lib/useAction";
+import { tempColor, tempLabel, visibleTemps } from "@/lib/temps";
 import { AfcCard } from "./Afc";
 import { cn, fmtDuration, fmtEta, fmtFilename, fmtPct, fmtTemp, fmtFilament } from "@/lib/format";
 import { ProgressRing } from "./ProgressRing";
@@ -236,32 +237,40 @@ function StateBadge({ snapshot: s }: { snapshot: Snapshot }) {
 }
 
 function Temperatures({ printer, snapshot: s }: { printer: PrinterConfig; snapshot: Snapshot }) {
-  const tiles = [
-    { label: "Buse", h: s.extruder, color: "text-heat" },
-    { label: "Lit", h: s.bed, color: "text-bed" },
-    ...(s.chamber ? [{ label: "Caisson", h: s.chamber, color: "text-chamber" }] : []),
-  ];
+  const tiles = visibleTemps(printer, s);
+  const cols = tiles.length === 0 ? 1 : tiles.length === 1 ? 1 : tiles.length === 2 || tiles.length === 4 ? 2 : 3;
   return (
     <div className="flex flex-col gap-2">
-      <div className={cn("grid gap-2", tiles.length === 3 ? "grid-cols-3" : "grid-cols-2")}>
-      {tiles.map((t) => (
-        <Card key={t.label} className="px-3 py-2">
-          <div className="text-[11px] font-medium text-fg-2">{t.label}</div>
-          <div className="flex items-baseline gap-1">
-            <span className={cn("text-[18px] font-semibold tabular-nums tracking-tight", t.h.target > 0 ? t.color : "")}>{fmtTemp(t.h.temperature)}</span>
-            {t.h.target > 0 && <span className="text-[11px] tabular-nums text-fg-3">/ {fmtTemp(t.h.target)}</span>}
-          </div>
-          {t.h.target > 0 && (
-            <div className="mt-1 h-1 overflow-hidden rounded-full bg-fg/10">
-              <div
-                className={cn("h-full rounded-full bg-current transition-[width] duration-500", t.color)}
-                style={{ width: `${Math.min(100, (t.h.temperature / t.h.target) * 100)}%` }}
-              />
-            </div>
-          )}
-        </Card>
-      ))}
-      </div>
+      {tiles.length > 0 && (
+        <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
+          {tiles.map((t) => {
+            const color = tempColor(t);
+            const hasTarget = t.target != null && t.target > 0;
+            return (
+              <Card key={t.object} className="px-3 py-2" title={t.object}>
+                <div className="truncate text-[11px] font-medium text-fg-2">{tempLabel(t.object)}</div>
+                <div className="flex items-baseline gap-1">
+                  <span className={cn("text-[18px] font-semibold tabular-nums tracking-tight", hasTarget ? color : "")}>{fmtTemp(t.temperature)}</span>
+                  {hasTarget && <span className="text-[11px] tabular-nums text-fg-3">/ {fmtTemp(t.target!)}</span>}
+                  {t.kind === "temperature_fan" && t.speed != null && (
+                    <span className="ml-auto text-[11px] tabular-nums text-fg-3" title="Vitesse du ventilateur">
+                      {Math.round(t.speed * 100)}%
+                    </span>
+                  )}
+                </div>
+                {hasTarget && (
+                  <div className="mt-1 h-1 overflow-hidden rounded-full bg-fg/10">
+                    <div
+                      className={cn("h-full rounded-full bg-current transition-[width] duration-500", color)}
+                      style={{ width: `${Math.min(100, (t.temperature / t.target!) * 100)}%` }}
+                    />
+                  </div>
+                )}
+              </Card>
+            );
+          })}
+        </div>
+      )}
       {!isBusy(s) && <Presets printer={printer} snapshot={s} />}
     </div>
   );

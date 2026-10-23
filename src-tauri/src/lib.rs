@@ -44,6 +44,7 @@ pub fn run() {
             commands::update_printer,
             commands::remove_printer,
             commands::set_pinned_macros,
+            commands::set_shown_temps,
             commands::get_active_printer,
             commands::set_active_printer,
             commands::printer_action,

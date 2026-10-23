@@ -203,6 +203,21 @@ impl Manager {
         Ok(())
     }
 
+    /// Change which temperature tiles are shown without restarting the client.
+    pub async fn set_shown_temps(&self, id: &str, objects: Vec<String>) -> Result<(), String> {
+        {
+            let mut printers = self.printers.lock().await;
+            let h = printers
+                .iter_mut()
+                .find(|h| h.cfg.id == id)
+                .ok_or_else(|| "Imprimante inconnue".to_string())?;
+            h.cfg.shown_temps = objects;
+        }
+        self.persist().await;
+        self.emit_printers().await;
+        Ok(())
+    }
+
     pub async fn active(&self) -> Option<String> {
         self.active.lock().await.clone()
     }
