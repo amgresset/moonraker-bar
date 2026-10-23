@@ -23,13 +23,16 @@ Built with **Tauri 2** (Rust) and **React + TypeScript + Tailwind**.
 
 <table>
   <tr>
-    <td align="center"><img src="docs/screenshots/printing.png" width="260" alt="Printing"><br><sub>Printing, with AFC lanes and macros</sub></td>
-    <td align="center"><img src="docs/screenshots/idle.png" width="260" alt="Idle"><br><sub>Idle, with preheat presets</sub></td>
-    <td align="center"><img src="docs/screenshots/fleet.png" width="260" alt="Fleet"><br><sub>Fleet view</sub></td>
+    <td align="center" rowspan="2" valign="top"><img src="docs/screenshots/live-webcam.png" width="300" alt="Live print on a Voron 2.4 with webcam and AFC"><br><sub>A real print on a Voron 2.4: webcam, AFC, macros</sub></td>
+    <td align="center"><img src="docs/screenshots/printing.png" width="240" alt="Printing"><br><sub>Printing, with AFC lanes</sub></td>
+    <td align="center"><img src="docs/screenshots/idle.png" width="240" alt="Idle"><br><sub>Idle, with preheat presets</sub></td>
   </tr>
   <tr>
-    <td align="center"><img src="docs/screenshots/printing-light.png" width="260" alt="Light theme"><br><sub>Follows the system light / dark theme</sub></td>
-    <td align="center" colspan="2"><img src="docs/screenshots/settings.png" width="260" alt="Settings"><br><sub>Settings: printers, temperature tiles, layout</sub></td>
+    <td align="center"><img src="docs/screenshots/fleet.png" width="240" alt="Fleet"><br><sub>Fleet view</sub></td>
+    <td align="center"><img src="docs/screenshots/printing-light.png" width="240" alt="Light theme"><br><sub>Follows the system light / dark theme</sub></td>
+  </tr>
+  <tr>
+    <td align="center" colspan="3"><img src="docs/screenshots/settings.png" width="240" alt="Settings"><br><sub>Settings: printers, temperature tiles, layout</sub></td>
   </tr>
 </table>
 
