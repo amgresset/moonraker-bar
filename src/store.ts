@@ -3,7 +3,7 @@ import { useShallow } from "zustand/react/shallow";
 import { backend } from "./lib/backend";
 import { EMPTY_SNAPSHOT, type PrinterConfig, type Snapshot, isBusy } from "./lib/types";
 
-export type View = "panel" | "settings";
+export type View = "panel" | "fleet" | "settings";
 
 interface State {
   ready: boolean;
@@ -64,7 +64,7 @@ export const useStore = create<State>((set, get) => ({
     );
   },
 
-  select: (id) => set({ selectedId: id }),
+  select: (id) => set({ selectedId: id, view: "panel" }),
 
   pin: async (id) => {
     await backend.setActivePrinter(id);

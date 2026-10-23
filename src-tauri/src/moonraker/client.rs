@@ -21,7 +21,7 @@ use tokio_tungstenite::tungstenite::http::HeaderValue;
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 
-use super::model::{ConnectionState, PrinterConfig, PrinterUpdate, Snapshot};
+use super::model::{ConnectionState, MacroInfo, PrinterConfig, PrinterUpdate, Snapshot};
 
 type Ws = WebSocketStream<MaybeTlsStream<TcpStream>>;
 type WsSink = SplitSink<Ws, Message>;
@@ -200,17 +200,22 @@ impl Session {
         }
 
         let list = self.rpc.call("printer.objects.list", json!({})).await?;
-        self.chamber_key = list
+        let objects: Vec<String> = list
             .get("objects")
             .and_then(Value::as_array)
-            .and_then(|objs| {
-                objs.iter().filter_map(Value::as_str).find(|o| {
-                    let lower = o.to_lowercase();
-                    (lower.starts_with("heater_generic ") || lower.starts_with("temperature_sensor "))
-                        && lower.contains("chamber")
-                })
+            .map(|a| a.iter().filter_map(Value::as_str).map(str::to_string).collect())
+            .unwrap_or_default();
+
+        self.chamber_key = objects
+            .iter()
+            .find(|o| {
+                let lower = o.to_lowercase();
+                (lower.starts_with("heater_generic ") || lower.starts_with("temperature_sensor "))
+                    && lower.contains("chamber")
             })
-            .map(str::to_string);
+            .cloned();
+
+        self.discover_macros(&objects).await;
 
         let res = self
             .rpc
@@ -223,6 +228,43 @@ impl Session {
             self.apply_status(status).await;
         }
         Ok(())
+    }
+
+    /// Collect public `gcode_macro` objects and their `description` from the config.
+    async fn discover_macros(&self, objects: &[String]) {
+        let mut names: Vec<String> = objects
+            .iter()
+            .filter_map(|o| o.strip_prefix("gcode_macro "))
+            .filter(|n| !n.starts_with('_'))
+            .map(str::to_string)
+            .collect();
+        names.sort_unstable_by_key(|n| n.to_uppercase());
+
+        // Descriptions live in configfile.settings["gcode_macro name"]["description"].
+        let settings = self
+            .rpc
+            .call("printer.objects.query", json!({ "objects": { "configfile": ["settings"] } }))
+            .await
+            .ok()
+            .and_then(|v| v.pointer("/status/configfile/settings").cloned())
+            .unwrap_or(Value::Null);
+
+        let macros: Vec<MacroInfo> = names
+            .into_iter()
+            .map(|name| {
+                let description = settings
+                    .get(format!("gcode_macro {}", name.to_lowercase()))
+                    .and_then(|m| m.get("description"))
+                    .and_then(Value::as_str)
+                    .filter(|d| *d != "G-Code macro")
+                    .unwrap_or("")
+                    .to_string();
+                MacroInfo { name, description }
+            })
+            .collect();
+
+        let mut s = self.snapshot.write().await;
+        s.macros = macros;
     }
 
     async fn apply_status(&mut self, status: &Value) {

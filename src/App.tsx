@@ -1,15 +1,22 @@
-import { useEffect } from "react";
-import { Settings as SettingsIcon, X, Power } from "lucide-react";
+import { useEffect, useLayoutEffect, useRef } from "react";
+import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
+import { Settings as SettingsIcon, X, Power, ChevronLeft } from "lucide-react";
 import { useStore } from "./store";
 import { backend } from "./lib/backend";
 import { cn } from "./lib/format";
 import { PrinterSwitcher } from "./components/PrinterSwitcher";
 import { PrinterPanel } from "./components/PrinterPanel";
+import { Fleet } from "./components/Fleet";
 import { Settings } from "./components/Settings";
 import { IconButton } from "./components/ui";
 
+const WIDTH = 360;
+const MIN_HEIGHT = 220;
+const MAX_HEIGHT = 700;
+
 export default function App() {
-  const { ready, view, setView, error, setError } = useStore();
+  const { ready, view, setView, error, setError, printers } = useStore();
+  const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     useStore.getState().init().catch((e) => setError(String(e)));
@@ -24,35 +31,68 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  // Size the native window to the content, so the popover never shows dead space.
+  useLayoutEffect(() => {
+    const el = rootRef.current;
+    if (!el) return;
+    let last = 0;
+    const apply = () => {
+      const h = Math.min(MAX_HEIGHT, Math.max(MIN_HEIGHT, Math.ceil(el.getBoundingClientRect().height)));
+      if (h === last) return;
+      last = h;
+      getCurrentWindow()
+        .setSize(new LogicalSize(WIDTH, h))
+        .catch(() => {});
+    };
+    const ro = new ResizeObserver(apply);
+    ro.observe(el);
+    apply();
+    return () => ro.disconnect();
+  }, []);
+
+  const multi = printers.length > 1;
+  const title = view === "settings" ? "Réglages" : view === "fleet" ? "Imprimantes" : null;
+
   return (
     <div
+      ref={rootRef}
       className={cn(
-        "flex h-full flex-col overflow-hidden rounded-[var(--radius-popover)]",
-        "border border-line bg-surface text-fg shadow-xl",
+        "flex flex-col overflow-hidden rounded-[var(--radius-popover)]",
+        "border border-line bg-surface text-fg",
       )}
+      style={{ maxHeight: MAX_HEIGHT }}
     >
-      <header className="drag flex items-center gap-2 px-3 pt-2.5 pb-2">
+      <header className="drag flex items-center gap-1 px-3 pt-2.5 pb-2">
         {view === "panel" ? (
-          <PrinterSwitcher />
+          <>
+            {multi && (
+              <IconButton title="Toutes les imprimantes" onClick={() => setView("fleet")} className="-ml-1 mr-0.5">
+                <ChevronLeft size={15} />
+              </IconButton>
+            )}
+            <PrinterSwitcher />
+          </>
         ) : (
-          <div className="flex-1 text-[15px] font-semibold tracking-tight">Réglages</div>
+          <div className="flex-1 text-[15px] font-semibold tracking-tight">{title}</div>
         )}
-        {view === "panel" ? (
-          <IconButton title="Réglages" onClick={() => setView("settings")}>
-            <SettingsIcon size={15} />
+        {view === "settings" ? (
+          <IconButton title="Retour" onClick={() => setView(multi ? "fleet" : "panel")}>
+            <X size={15} />
           </IconButton>
         ) : (
-          <IconButton title="Retour" onClick={() => setView("panel")}>
-            <X size={15} />
+          <IconButton title="Réglages" onClick={() => setView("settings")}>
+            <SettingsIcon size={15} />
           </IconButton>
         )}
       </header>
 
       <main className="min-h-0 flex-1 overflow-y-auto px-3 pb-3">
         {!ready ? (
-          <div className="flex h-full items-center justify-center text-fg-2">Chargement…</div>
+          <div className="py-10 text-center text-fg-2">Chargement…</div>
         ) : view === "panel" ? (
           <PrinterPanel />
+        ) : view === "fleet" ? (
+          <Fleet />
         ) : (
           <Settings />
         )}

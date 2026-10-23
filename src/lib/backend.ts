@@ -17,6 +17,8 @@ export const backend = {
   updatePrinter: (id: string, input: PrinterInput) =>
     invoke<PrinterConfig>("update_printer", { id, input }),
   removePrinter: (id: string) => invoke<void>("remove_printer", { id }),
+  setPinnedMacros: (id: string, macros: string[]) =>
+    invoke<void>("set_pinned_macros", { id, macros }),
   getActivePrinter: () => invoke<string | null>("get_active_printer"),
   setActivePrinter: (id: string | null) => invoke<void>("set_active_printer", { id }),
   action: (id: string, action: PrinterAction, arg?: string) =>

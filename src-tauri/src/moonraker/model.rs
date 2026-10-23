@@ -18,6 +18,9 @@ pub struct PrinterConfig {
     /// (e.g. `/webcam/?action=snapshot`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub camera_url: Option<String>,
+    /// Klipper macros shown as buttons in the panel, in display order.
+    #[serde(default)]
+    pub pinned_macros: Vec<String>,
 }
 
 impl PrinterConfig {
@@ -60,6 +63,14 @@ pub enum ConnectionState {
     Offline,
     Connecting,
     Connected,
+}
+
+/// A `[gcode_macro NAME]` section discovered on the printer.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+pub struct MacroInfo {
+    pub name: String,
+    #[serde(default)]
+    pub description: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
@@ -106,6 +117,8 @@ pub struct Snapshot {
     pub message: String,
     pub hostname: String,
     pub software_version: String,
+    /// Public `gcode_macro` sections (names not starting with `_`), sorted.
+    pub macros: Vec<MacroInfo>,
     /// Unix epoch, milliseconds.
     pub last_update: u64,
     pub last_error: Option<String>,

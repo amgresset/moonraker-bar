@@ -24,7 +24,7 @@ pub struct PrinterInput {
 }
 
 impl PrinterInput {
-    fn into_config(self, id: String) -> Result<PrinterConfig, String> {
+    fn into_config(self, id: String, pinned_macros: Vec<String>) -> Result<PrinterConfig, String> {
         let name = self.name.trim().to_string();
         let url = self.url.trim().trim_end_matches('/').to_string();
         if url.is_empty() {
@@ -36,6 +36,7 @@ impl PrinterInput {
             url,
             api_key: clean(self.api_key),
             camera_url: clean(self.camera_url),
+            pinned_macros,
         };
         cfg.websocket_url()?; // validate
         Ok(cfg)
@@ -58,15 +59,27 @@ pub async fn get_snapshots(mgr: Mgr<'_>) -> Result<HashMap<String, Snapshot>, St
 
 #[tauri::command]
 pub async fn add_printer(mgr: Mgr<'_>, input: PrinterInput) -> Result<PrinterConfig, String> {
-    let cfg = input.into_config(String::new())?;
+    let cfg = input.into_config(String::new(), Vec::new())?;
     Ok(mgr.add(cfg).await)
 }
 
 #[tauri::command]
 pub async fn update_printer(mgr: Mgr<'_>, id: String, input: PrinterInput) -> Result<PrinterConfig, String> {
-    let cfg = input.into_config(id)?;
+    let pinned = mgr
+        .list()
+        .await
+        .into_iter()
+        .find(|p| p.id == id)
+        .map(|p| p.pinned_macros)
+        .unwrap_or_default();
+    let cfg = input.into_config(id, pinned)?;
     mgr.update(cfg.clone()).await?;
     Ok(cfg)
+}
+
+#[tauri::command]
+pub async fn set_pinned_macros(mgr: Mgr<'_>, id: String, macros: Vec<String>) -> Result<(), String> {
+    mgr.set_pinned_macros(&id, macros).await
 }
 
 #[tauri::command]
@@ -121,7 +134,7 @@ pub async fn printer_action(
 /// Connectivity check for the settings form. Returns a short description of the host.
 #[tauri::command]
 pub async fn test_connection(input: PrinterInput) -> Result<String, String> {
-    let cfg = input.into_config("probe".into())?;
+    let cfg = input.into_config("probe".into(), Vec::new())?;
     moonraker::probe(&cfg).await
 }
 

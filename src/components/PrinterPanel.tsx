@@ -1,11 +1,27 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Pause, Play, Square, Gauge, AlertTriangle, RotateCcw, Layers, Clock, Flag, Fan, Camera } from "lucide-react";
+import {
+  Pause,
+  Play,
+  Square,
+  Gauge,
+  AlertTriangle,
+  RotateCcw,
+  Layers,
+  Clock,
+  Flag,
+  Fan,
+  Camera,
+  Printer,
+  Terminal,
+  Check,
+  Loader2,
+} from "lucide-react";
 import { useStore, useSelectedPrinter } from "@/store";
 import { backend } from "@/lib/backend";
 import { isBusy, type PrinterAction, type PrinterConfig, type Snapshot } from "@/lib/types";
 import { cn, fmtDuration, fmtEta, fmtFilename, fmtPct, fmtTemp, fmtFilament } from "@/lib/format";
 import { ProgressRing } from "./ProgressRing";
-import { Badge, Button, Card } from "./ui";
+import { Badge, Button, Card, Input } from "./ui";
 
 export function PrinterPanel() {
   const { printer, snapshot } = useSelectedPrinter();
@@ -26,8 +42,9 @@ export function PrinterPanel() {
     return <OfflineCard printer={printer} snapshot={snapshot} />;
   }
 
+  const busy = isBusy(snapshot);
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-2.5">
       {snapshot.klippy_state !== "ready" && <KlippyBanner printer={printer} snapshot={snapshot} />}
       <JobCard snapshot={snapshot} />
       {snapshot.message && snapshot.message !== snapshot.filename && (
@@ -36,8 +53,10 @@ export function PrinterPanel() {
         </div>
       )}
       <Temperatures snapshot={snapshot} />
-      <Controls printer={printer} snapshot={snapshot} />
+      {busy && <Controls printer={printer} snapshot={snapshot} />}
+      <Macros printer={printer} snapshot={snapshot} />
       <CameraCard printer={printer} />
+      <EmergencyStop printer={printer} />
     </div>
   );
 }
@@ -108,10 +127,31 @@ function labelKlippy(state: string) {
 function JobCard({ snapshot: s }: { snapshot: Snapshot }) {
   const busy = isBusy(s);
   const paused = s.print_state === "paused";
+  const finished = s.print_state === "complete" || s.print_state === "cancelled" || s.print_state === "error";
+
+  // Idle: a compact one-line card instead of the big ring.
+  if (!busy && !finished) {
+    return (
+      <Card className="flex items-center gap-3 py-2.5">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-3 text-fg-2">
+          <Printer size={16} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="text-[14px] font-semibold tracking-tight">Prête à imprimer</div>
+          <div className="truncate text-[11px] text-fg-3">
+            {s.hostname || "Klipper"}
+            {s.software_version ? ` · Moonraker ${s.software_version.replace(/^v/, "")}` : ""}
+          </div>
+        </div>
+        <span className="h-2 w-2 rounded-full bg-ok" />
+      </Card>
+    );
+  }
+
   return (
     <Card>
       <div className="flex items-center gap-3">
-        <ProgressRing value={busy ? s.progress : s.print_state === "complete" ? 1 : 0} paused={paused} size={104} stroke={9}>
+        <ProgressRing value={busy ? s.progress : s.print_state === "complete" ? 1 : s.progress} paused={paused} size={104} stroke={9}>
           {busy ? (
             <>
               <div className="text-[22px] font-semibold leading-none tabular-nums tracking-tight">{fmtPct(s.progress)}</div>
@@ -138,9 +178,10 @@ function JobCard({ snapshot: s }: { snapshot: Snapshot }) {
               )}
             </dl>
           )}
-          {!busy && s.print_state === "complete" && (
+          {finished && (
             <div className="mt-1 text-[12px] text-fg-2">
-              en {fmtDuration(s.print_duration)} · {fmtFilament(s.filament_used)} de filament
+              {s.print_state === "complete" ? "en " : "après "}
+              {fmtDuration(s.print_duration)} · {fmtFilament(s.filament_used)} de filament
             </div>
           )}
         </div>
@@ -218,21 +259,26 @@ function Temperatures({ snapshot: s }: { snapshot: Snapshot }) {
 
 const SPEEDS = [50, 100, 150, 200];
 
-function Controls({ printer, snapshot: s }: { printer: PrinterConfig; snapshot: Snapshot }) {
+/** Runs a printer action and tracks which one is in flight. */
+function useAction(printerId: string) {
   const [pending, setPending] = useState<string | null>(null);
-  const busy = isBusy(s);
-  const ready = s.klippy_state === "ready";
-
   const run = async (action: PrinterAction, arg?: string) => {
-    setPending(action);
+    setPending(arg ? `${action}:${arg}` : action);
     try {
-      await backend.action(printer.id, action, arg);
+      await backend.action(printerId, action, arg);
     } catch (e) {
       useStore.getState().setError(String(e));
     } finally {
       setPending(null);
     }
   };
+  return { pending, run };
+}
+
+function Controls({ printer, snapshot: s }: { printer: PrinterConfig; snapshot: Snapshot }) {
+  const { pending, run } = useAction(printer.id);
+  const busy = isBusy(s);
+  const ready = s.klippy_state === "ready";
 
   return (
     <Card className="flex flex-col gap-2.5">
@@ -281,21 +327,135 @@ function Controls({ printer, snapshot: s }: { printer: PrinterConfig; snapshot: 
           <Fan size={13} className={cn(s.fan_speed > 0 && "animate-spin [animation-duration:2s]")} /> {Math.round(s.fan_speed * 100)}%
         </span>
       </div>
-
-      <div className="flex justify-end">
-        <ConfirmButton
-          label="Arrêt d'urgence"
-          confirmLabel="Confirmer l'arrêt ?"
-          variant="ghost"
-          size="sm"
-          icon={<AlertTriangle size={12} />}
-          disabled={pending != null}
-          onConfirm={() => run("estop")}
-          className="text-danger hover:bg-danger/10 hover:text-danger"
-        />
-      </div>
     </Card>
   );
+}
+
+function EmergencyStop({ printer }: { printer: PrinterConfig }) {
+  const { pending, run } = useAction(printer.id);
+  return (
+    <div className="flex justify-end">
+      <ConfirmButton
+        label="Arrêt d'urgence"
+        confirmLabel="Confirmer l'arrêt ?"
+        variant="ghost"
+        size="sm"
+        icon={<AlertTriangle size={12} />}
+        disabled={pending != null}
+        onConfirm={() => run("estop")}
+        className="text-danger hover:bg-danger/10 hover:text-danger"
+      />
+    </div>
+  );
+}
+
+/** Pinned Klipper macros as buttons, with a picker to choose which ones to show. */
+function Macros({ printer, snapshot: s }: { printer: PrinterConfig; snapshot: Snapshot }) {
+  const { pending, run } = useAction(printer.id);
+  const [editing, setEditing] = useState(false);
+  const [filter, setFilter] = useState("");
+  const ready = s.klippy_state === "ready";
+  const byName = new Map(s.macros.map((m) => [m.name, m]));
+  const pinned = printer.pinned_macros.filter((n) => byName.has(n));
+
+  const toggle = async (name: string) => {
+    const next = printer.pinned_macros.includes(name)
+      ? printer.pinned_macros.filter((n) => n !== name)
+      : [...printer.pinned_macros, name];
+    try {
+      await backend.setPinnedMacros(printer.id, next);
+    } catch (e) {
+      useStore.getState().setError(String(e));
+    }
+  };
+
+  if (s.macros.length === 0) return null;
+
+  if (editing) {
+    const q = filter.trim().toLowerCase();
+    const list = s.macros.filter((m) => !q || m.name.toLowerCase().includes(q) || m.description.toLowerCase().includes(q));
+    return (
+      <Card className="flex flex-col gap-2 p-2.5">
+        <div className="flex items-center gap-2">
+          <Input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Filtrer les macros…" autoFocus className="h-7" />
+          <Button size="sm" variant="primary" onClick={() => setEditing(false)}>
+            OK
+          </Button>
+        </div>
+        <div className="max-h-56 overflow-y-auto rounded-lg border border-line">
+          {list.map((m) => {
+            const on = printer.pinned_macros.includes(m.name);
+            return (
+              <button
+                key={m.name}
+                onClick={() => toggle(m.name)}
+                className={cn(
+                  "flex w-full items-center gap-2 border-b border-line px-2.5 py-1.5 text-left last:border-b-0 hover:bg-surface-3/60",
+                  on && "bg-accent/8",
+                )}
+              >
+                <span className={cn("flex h-4 w-4 shrink-0 items-center justify-center rounded border", on ? "border-accent bg-accent text-accent-fg" : "border-fg/25")}>
+                  {on && <Check size={11} />}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-mono text-[12px]">{m.name}</span>
+                  {m.description && <span className="block truncate text-[11px] text-fg-3">{m.description}</span>}
+                </span>
+              </button>
+            );
+          })}
+          {list.length === 0 && <div className="px-2.5 py-3 text-center text-[12px] text-fg-3">Aucune macro</div>}
+        </div>
+      </Card>
+    );
+  }
+
+  return (
+    <Card className="p-2.5">
+      <div className="mb-1.5 flex items-center justify-between">
+        <span className="flex items-center gap-1 text-[11px] font-medium uppercase tracking-wide text-fg-2">
+          <Terminal size={12} /> Macros
+        </span>
+        <button onClick={() => setEditing(true)} className="rounded px-1.5 py-0.5 text-[11px] text-fg-3 hover:bg-surface-3 hover:text-fg">
+          {pinned.length ? "Modifier" : "Choisir…"}
+        </button>
+      </div>
+      {pinned.length === 0 ? (
+        <div className="text-[12px] text-fg-3">
+          {s.macros.length} macro{s.macros.length > 1 ? "s" : ""} disponible{s.macros.length > 1 ? "s" : ""} — choisis celles à afficher ici.
+        </div>
+      ) : (
+        <div className="flex flex-wrap gap-1.5">
+          {pinned.map((name) => {
+            const m = byName.get(name)!;
+            const running = pending === `gcode:${name}`;
+            return (
+              <button
+                key={name}
+                title={m.description || name}
+                disabled={!ready || pending != null}
+                onClick={() => run("gcode", name)}
+                className={cn(
+                  "rounded-lg bg-surface-3 px-2.5 py-1.5 font-mono text-[12px] text-fg transition",
+                  "hover:brightness-110 active:brightness-95 disabled:opacity-50",
+                  running && "bg-accent text-accent-fg",
+                )}
+              >
+                {running ? <Loader2 size={12} className="inline animate-spin" /> : null} {prettyMacro(name)}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+/** PRINT_START → "Print start" for display; the real name is sent to Klipper. */
+function prettyMacro(name: string) {
+  const words = name.toLowerCase().split("_").filter(Boolean);
+  if (words.length === 0) return name;
+  return words[0].charAt(0).toUpperCase() + words[0].slice(1) + (words.length > 1 ? " " + words.slice(1).join(" ") : "");
 }
 
 /** Two-step button: first click arms it for 3 s, second click fires. */

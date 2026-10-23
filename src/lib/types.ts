@@ -6,6 +6,12 @@ export interface PrinterConfig {
   url: string;
   api_key?: string;
   camera_url?: string;
+  pinned_macros: string[];
+}
+
+export interface MacroInfo {
+  name: string;
+  description: string;
 }
 
 export interface PrinterInput {
@@ -55,6 +61,7 @@ export interface Snapshot {
   message: string;
   hostname: string;
   software_version: string;
+  macros: MacroInfo[];
   last_update: number;
   last_error: string | null;
 }
@@ -98,6 +105,7 @@ export const EMPTY_SNAPSHOT: Snapshot = {
   message: "",
   hostname: "",
   software_version: "",
+  macros: [],
   last_update: 0,
   last_error: null,
 };
