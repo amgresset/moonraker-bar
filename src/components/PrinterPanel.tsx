@@ -26,6 +26,7 @@ import { artState, partColor, artTools } from "@/lib/art";
 import { useThumbnail } from "@/lib/useThumbnail";
 import { PrinterArt } from "./PrinterArt";
 import { tempColor, tempLabel, visibleTemps } from "@/lib/temps";
+import { AceCard } from "./Ace";
 import { AfcCard } from "./Afc";
 import { cn, fmtDuration, fmtEta, fmtFilename, fmtPct, fmtTemp, fmtFilament } from "@/lib/format";
 import { Badge, Button, Card, Input } from "./ui";
@@ -53,6 +54,16 @@ export function PrinterPanel() {
   const busy = isBusy(snapshot);
   const { order, hidden } = resolveLayout(layout);
 
+  // MultiACE also exposes an AFC-shaped shim so Mainsail's AFC panel lights up.
+  // The shim reports no hub, no extruder and no lane weights, so the AFC card
+  // would be a hollow copy of what the MultiACE card already shows. A real Box
+  // Turtle next to an ACE reports hubs and extruders, and keeps both cards.
+  const afcIsAceShim =
+    snapshot.ace != null &&
+    snapshot.afc != null &&
+    snapshot.afc.hubs.length === 0 &&
+    snapshot.afc.extruders.length === 0;
+
   const cards: Record<CardId, ReactNode> = {
     job: (
       <>
@@ -66,7 +77,8 @@ export function PrinterPanel() {
     ),
     temps: <Temperatures printer={printer} snapshot={snapshot} />,
     controls: busy ? <Controls printer={printer} snapshot={snapshot} /> : null,
-    afc: snapshot.afc ? <AfcCard printer={printer} snapshot={snapshot} afc={snapshot.afc} /> : null,
+    ace: snapshot.ace ? <AceCard printer={printer} snapshot={snapshot} ace={snapshot.ace} /> : null,
+    afc: snapshot.afc && !afcIsAceShim ? <AfcCard printer={printer} snapshot={snapshot} afc={snapshot.afc} /> : null,
     macros: <Macros printer={printer} snapshot={snapshot} />,
     camera: <CameraCard printer={printer} snapshot={snapshot} />,
     actions: <QuickActions printer={printer} snapshot={snapshot} />,

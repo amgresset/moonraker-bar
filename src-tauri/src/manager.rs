@@ -19,7 +19,7 @@ const KEY_ACTIVE: &str = "active";
 const KEY_LAYOUT: &str = "layout";
 
 /// Which cards the panel shows, and in what order. Keys are the card ids the
-/// front knows: job, temps, controls, afc, macros, camera, actions.
+/// front knows: job, temps, controls, ace, afc, macros, camera, actions.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default, PartialEq)]
 pub struct Layout {
     #[serde(default)]

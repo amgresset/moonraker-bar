@@ -30,13 +30,14 @@ export interface Discovered {
 }
 
 /** Panel cards, in their default order. */
-export const CARD_IDS = ["job", "temps", "controls", "afc", "macros", "camera", "actions"] as const;
+export const CARD_IDS = ["job", "temps", "controls", "ace", "afc", "macros", "camera", "actions"] as const;
 export type CardId = (typeof CARD_IDS)[number];
 
 export const CARD_LABELS: Record<CardId, string> = {
   job: "Job",
   temps: "Temperatures & presets",
   controls: "Print controls",
+  ace: "MultiACE",
   afc: "AFC",
   macros: "Macros",
   camera: "Camera",
@@ -172,6 +173,77 @@ export interface AfcState {
   extruders: AfcExtruder[];
 }
 
+export interface AceSlot {
+  ace: number;
+  slot: number;
+  occupied: boolean;
+  material: string;
+  vendor: string;
+  label: string;
+  color: string;
+  weight: number;
+  spool_id: number | null;
+}
+
+export interface AceHead {
+  index: number;
+  ace: number;
+  slot: number | null;
+  material: string;
+  subtype: string;
+  vendor: string;
+  color: string;
+  manual: boolean;
+  feeder: boolean;
+}
+
+export interface AceDryer {
+  status: string;
+  target_temp: number;
+  duration: number;
+  remain_time: number;
+}
+
+export interface AceUnit {
+  index: number;
+  connected: boolean;
+  temp: number;
+  humidity: number | null;
+  dryer: AceDryer;
+}
+
+/** Engine contract this card was written against (`ace.api_version`). */
+export const ACE_API_VERSION = 1;
+
+export interface AceState {
+  api_version: number;
+  status: "ready" | "busy" | "unknown" | string;
+  mode: "normal" | "multi" | "head" | string;
+  device_count: number;
+  active_device: number;
+  temp: number;
+  dryer: AceDryer;
+  swap_phase: string;
+  swap_in_progress: boolean;
+  unload_all_active: boolean;
+  last_swap_result: string;
+  calibration_state: string;
+  spoolman: boolean;
+  units: AceUnit[];
+  slots: AceSlot[];
+  heads: AceHead[];
+}
+
+/** `extruder` → 0, `extruder2` → 2. Null when no toolhead is reported. */
+export function activeHeadIndex(activeExtruder: string): number | null {
+  if (activeExtruder === "extruder") return 0;
+  const m = /^extruder(\d+)$/.exec(activeExtruder);
+  return m ? Number(m[1]) : null;
+}
+
+/** A head with an ACE slot routed to it, as opposed to hand-fed or stock-fed. */
+export const aceHeadBound = (h: AceHead) => h.slot != null && !h.manual && !h.feeder;
+
 export interface Heater {
   temperature: number;
   target: number;
@@ -205,6 +277,7 @@ export interface Snapshot {
   presets: Preset[];
   cooldown_gcode: string;
   afc: AfcState | null;
+  ace: AceState | null;
   temperatures: TempReading[];
   webcams: Webcam[];
   thumbnail: string | null;
@@ -263,6 +336,7 @@ export const EMPTY_SNAPSHOT: Snapshot = {
   presets: [],
   cooldown_gcode: "",
   afc: null,
+  ace: null,
   temperatures: [],
   webcams: [],
   thumbnail: null,

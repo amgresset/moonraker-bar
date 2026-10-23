@@ -22,7 +22,8 @@ use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 
 use super::model::{
-    AfcKeys, ConnectionState, MacroInfo, Machine, Preset, PresetTarget, PrinterConfig, PrinterUpdate, Snapshot, TempReading,
+    AceState, AfcKeys, ConnectionState, MacroInfo, Machine, Preset, PresetTarget, PrinterConfig, PrinterUpdate, Snapshot,
+    TempReading,
     Webcam,
 };
 
@@ -41,7 +42,7 @@ const KEEPALIVE: Duration = Duration::from_secs(20);
 const MAX_BACKOFF_SECS: u64 = 15;
 
 /// Printer objects we subscribe to. `None` means "every field".
-fn subscription_objects(chamber_key: Option<&str>, afc: Option<&AfcKeys>, temps: &[TempReading]) -> Value {
+fn subscription_objects(chamber_key: Option<&str>, afc: Option<&AfcKeys>, ace: bool, temps: &[TempReading]) -> Value {
     let mut objects = json!({
         "webhooks": null,
         "print_stats": null,
@@ -58,6 +59,9 @@ fn subscription_objects(chamber_key: Option<&str>, afc: Option<&AfcKeys>, temps:
     }
     if let Some(afc) = afc {
         afc.subscription(&mut objects);
+    }
+    if ace {
+        AceState::subscription(&mut objects);
     }
     for t in temps {
         objects[&t.object] = TempReading::fields(&t.kind);
@@ -185,6 +189,8 @@ struct Session {
     updates: mpsc::Sender<PrinterUpdate>,
     chamber_key: Option<String>,
     afc_keys: Option<AfcKeys>,
+    /// MultiACE installed on this printer.
+    ace: bool,
     metadata_for: String,
 }
 
@@ -208,7 +214,8 @@ impl Session {
         s.touch();
     }
 
-    /// Discover optional objects (chamber sensor), subscribe and apply the initial status.
+    /// Discover optional objects (chamber sensor, AFC, MultiACE), subscribe and
+    /// apply the initial status.
     async fn subscribe(&mut self) -> Result<(), String> {
         if let Ok(info) = self.rpc.call("printer.info", json!({})).await {
             let mut s = self.snapshot.write().await;
@@ -244,6 +251,11 @@ impl Session {
             self.snapshot.write().await.afc = None;
         }
 
+        self.ace = AceState::present(&objects);
+        if !self.ace {
+            self.snapshot.write().await.ace = None;
+        }
+
         // Every temperature-bearing object, so the user can pick which tiles to show.
         let temps: Vec<TempReading> = objects
             .iter()
@@ -266,7 +278,14 @@ impl Session {
             .rpc
             .call(
                 "printer.objects.subscribe",
-                json!({ "objects": subscription_objects(self.chamber_key.as_deref(), self.afc_keys.as_ref(), &temps) }),
+                json!({
+                    "objects": subscription_objects(
+                        self.chamber_key.as_deref(),
+                        self.afc_keys.as_ref(),
+                        self.ace,
+                        &temps,
+                    )
+                }),
             )
             .await?;
         if let Some(status) = res.get("status") {
@@ -338,7 +357,7 @@ impl Session {
     async fn apply_status(&mut self, status: &Value) {
         let filename = {
             let mut s = self.snapshot.write().await;
-            s.apply_status(status, self.chamber_key.as_deref(), self.afc_keys.as_ref());
+            s.apply_status(status, self.chamber_key.as_deref(), self.afc_keys.as_ref(), self.ace);
             s.filename.clone()
         };
         if filename != self.metadata_for {
@@ -684,6 +703,7 @@ async fn session(
         updates: updates.clone(),
         chamber_key: None,
         afc_keys: None,
+        ace: false,
         metadata_for: String::new(),
     };
 
