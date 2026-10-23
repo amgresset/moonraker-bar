@@ -32,6 +32,9 @@ tokio-tungstenite = { version = "0.26", features = ["rustls-tls-webpki-roots"] }
 futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
 url = "2"
 uuid = { version = "1", features = ["v4"] }
+reqwest = { version = "0.13", default-features = false, features = ["rustls"] }
+mdns-sd = "0.13"
+base64 = "0.22"
 
 [profile.release]
 codegen-units = 1

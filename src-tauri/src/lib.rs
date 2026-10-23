@@ -1,4 +1,5 @@
 mod commands;
+mod discovery;
 mod manager;
 mod moonraker;
 mod tray;
@@ -48,6 +49,8 @@ pub fn run() {
             commands::set_pinned_macros,
             commands::set_shown_temps,
             commands::get_layout,
+            commands::get_thumbnail,
+            commands::discover_printers,
             commands::set_layout,
             commands::get_active_printer,
             commands::set_active_printer,

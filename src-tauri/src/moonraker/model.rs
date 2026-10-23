@@ -27,6 +27,9 @@ pub struct PrinterConfig {
     /// Temperature objects shown as tiles, in display order. Empty = sensible default.
     #[serde(default)]
     pub shown_temps: Vec<String>,
+    /// Illustration to draw: `voron24`, `trident`, `v0`, `bedslinger`, `generic`. None = detect.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
 }
 
 impl PrinterConfig {
@@ -123,6 +126,18 @@ impl Preset {
         }
         lines.join("\n")
     }
+}
+
+/// What the Klipper config says about the machine, used to pick its illustration.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+pub struct Machine {
+    /// `corexy`, `cartesian`, `corexz`, `delta`…
+    pub kinematics: String,
+    pub x_max: f64,
+    pub y_max: f64,
+    pub z_max: f64,
+    /// `qgl` (quad_gantry_level), `z_tilt`, or empty.
+    pub leveling: String,
 }
 
 /// A webcam as configured in Moonraker (`[webcam]` sections, or added from Mainsail / Fluidd).
@@ -476,6 +491,16 @@ pub struct Snapshot {
     pub temperatures: Vec<TempReading>,
     /// Webcams configured in Moonraker.
     pub webcams: Vec<Webcam>,
+    /// Slicer thumbnail of the current file, as a path under the `gcodes` root.
+    pub thumbnail: Option<String>,
+    /// First filament color / type written by the slicer in the file metadata.
+    pub filament_color: Option<String>,
+    pub filament_type: Option<String>,
+    /// Every filament color in the file, one per tool (multi-tool / toolchanger prints).
+    pub filament_colors: Vec<String>,
+    /// Extruder the toolhead is using: `extruder`, `extruder1`… (toolchangers).
+    pub active_extruder: String,
+    pub machine: Machine,
     /// Unix epoch, milliseconds.
     pub last_update: u64,
     pub last_error: Option<String>,
@@ -572,6 +597,9 @@ impl Snapshot {
         }
         if let Some(f) = status.get("fan") {
             set_f64(&mut self.fan_speed, f.get("speed"));
+        }
+        if let Some(e) = status.get("toolhead").and_then(|t| t.get("extruder")).and_then(Value::as_str) {
+            self.active_extruder = e.to_string();
         }
         if let Some(g) = status.get("gcode_move") {
             set_f64(&mut self.speed_factor, g.get("speed_factor"));

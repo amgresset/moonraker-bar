@@ -3,6 +3,9 @@ import { useStore } from "@/store";
 import { EMPTY_SNAPSHOT, isBusy, type PrinterConfig, type Snapshot } from "@/lib/types";
 import { cn, fmtDuration, fmtFilename, fmtPct, fmtTemp } from "@/lib/format";
 import { ProgressRing } from "./ProgressRing";
+import { PrinterArt } from "./PrinterArt";
+import { detectModel } from "@/lib/model";
+import { artState, partColor, artTools } from "@/lib/art";
 import { Card } from "./ui";
 
 /** All printers at a glance; click one to open its panel. */
@@ -10,7 +13,7 @@ export function Fleet() {
   const { printers, snapshots, activeId, select, pin } = useStore();
   return (
     <div className="flex flex-col gap-2">
-      {printers.map((p) => (
+      {[...printers].sort((a, b) => urgency(snapshots[a.id]) - urgency(snapshots[b.id])).map((p) => (
         <FleetRow
           key={p.id}
           printer={p}
@@ -59,13 +62,13 @@ function FleetRow({
   return (
     <Card className={cn("group flex items-center gap-3 p-2.5 transition hover:bg-surface-3/50", !online && "opacity-70")}>
       <button onClick={onOpen} className="flex min-w-0 flex-1 items-center gap-3 text-left">
-        <ProgressRing value={busy ? s.progress : 0} paused={paused} size={44} stroke={5} className={cn(!busy && "opacity-60")}>
-          {busy ? (
+        {busy ? (
+          <ProgressRing value={s.progress} paused={paused} size={44} stroke={5}>
             <span className="text-[10px] font-semibold tabular-nums">{fmtPct(s.progress)}</span>
-          ) : (
-            <span className={cn("h-2 w-2 rounded-full", !online ? "bg-fg-3" : alert ? "bg-danger" : "bg-ok")} />
-          )}
-        </ProgressRing>
+          </ProgressRing>
+        ) : (
+          <PrinterArt model={detectModel(printer, s)} tools={artTools(detectModel(printer, s), s)} progress={0} state={artState(s)} color={partColor(s)} size={48} className="-m-0.5 shrink-0" />
+        )}
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
             <span className="truncate text-[13px] font-semibold tracking-tight">{printer.name}</span>
@@ -88,4 +91,13 @@ function FleetRow({
       <ChevronRight size={14} className="shrink-0 text-fg-3" />
     </Card>
   );
+}
+
+/** Printers that need attention first: error, paused, printing, idle, offline. */
+function urgency(s: Snapshot | undefined): number {
+  if (!s || s.connection !== "connected") return 4;
+  if (s.print_state === "error" || s.klippy_state === "shutdown" || s.klippy_state === "error") return 0;
+  if (s.print_state === "paused") return 1;
+  if (s.print_state === "printing") return 2;
+  return 3;
 }

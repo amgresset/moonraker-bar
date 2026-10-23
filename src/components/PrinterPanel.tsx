@@ -6,12 +6,8 @@ import {
   Gauge,
   AlertTriangle,
   RotateCcw,
-  Layers,
-  Clock,
-  Flag,
   Fan,
   Camera,
-  Printer,
   Terminal,
   Check,
   Loader2,
@@ -25,10 +21,13 @@ import { backend } from "@/lib/backend";
 import { isBusy, resolveLayout, type CardId, type PrinterConfig, type Snapshot } from "@/lib/types";
 import { useAction } from "@/lib/useAction";
 import { cameraSource } from "@/lib/camera";
+import { detectModel } from "@/lib/model";
+import { artState, partColor, artTools } from "@/lib/art";
+import { useThumbnail } from "@/lib/useThumbnail";
+import { PrinterArt } from "./PrinterArt";
 import { tempColor, tempLabel, visibleTemps } from "@/lib/temps";
 import { AfcCard } from "./Afc";
 import { cn, fmtDuration, fmtEta, fmtFilename, fmtPct, fmtTemp, fmtFilament } from "@/lib/format";
-import { ProgressRing } from "./ProgressRing";
 import { Badge, Button, Card, Input } from "./ui";
 
 export function PrinterPanel() {
@@ -57,7 +56,7 @@ export function PrinterPanel() {
   const cards: Record<CardId, ReactNode> = {
     job: (
       <>
-        <JobCard snapshot={snapshot} />
+        <JobCard printer={printer} snapshot={snapshot} />
         {snapshot.message && snapshot.message !== snapshot.filename && (
           <div className="truncate rounded-lg bg-surface-3 px-3 py-1.5 text-[12px] text-fg-2" title={snapshot.message}>
             {snapshot.message}
@@ -150,18 +149,18 @@ function labelKlippy(state: string) {
   }
 }
 
-function JobCard({ snapshot: s }: { snapshot: Snapshot }) {
+function JobCard({ printer, snapshot: s }: { printer: PrinterConfig; snapshot: Snapshot }) {
   const busy = isBusy(s);
-  const paused = s.print_state === "paused";
   const finished = s.print_state === "complete" || s.print_state === "cancelled" || s.print_state === "error";
+  const model = detectModel(printer, s);
+  const thumb = useThumbnail(printer.id, busy || finished ? s.thumbnail : null);
+  const material = s.afc?.lanes.find((l) => l.name === s.afc?.current_load)?.material || s.filament_type;
 
-  // Idle: a compact one-line card instead of the big ring.
+  // Idle: a compact one-line card.
   if (!busy && !finished) {
     return (
-      <Card className="flex items-center gap-3 py-2.5">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-3 text-fg-2">
-          <Printer size={16} />
-        </div>
+      <Card className="flex items-center gap-3 py-2">
+        <PrinterArt model={model} tools={artTools(model, s)} progress={0} state={artState(s)} size={48} className="-my-1 shrink-0" />
         <div className="min-w-0 flex-1">
           <div className="text-[14px] font-semibold tracking-tight">Ready to print</div>
           <div className="truncate text-[11px] text-fg-3">
@@ -174,38 +173,50 @@ function JobCard({ snapshot: s }: { snapshot: Snapshot }) {
     );
   }
 
+  const pct = s.print_state === "complete" ? 1 : s.progress;
   return (
     <Card>
-      <div className="flex items-center gap-3">
-        <ProgressRing value={busy ? s.progress : s.print_state === "complete" ? 1 : s.progress} paused={paused} size={104} stroke={9}>
+      <div className="flex items-stretch gap-3">
+        <div className="-my-1 -ml-1 shrink-0">
+          <PrinterArt model={model} tools={artTools(model, s)} progress={pct} state={artState(s)} color={partColor(s)} size={112} />
+        </div>
+
+        <div className="flex min-w-0 flex-1 flex-col">
+          <div className="flex items-start gap-2">
+            <div className="min-w-0 flex-1">
+              <div className="mb-1 flex items-center gap-1.5">
+                <StateBadge snapshot={s} />
+                {material && <span className="truncate text-[11px] text-fg-3">{material}</span>}
+              </div>
+              <div className="truncate text-[14px] font-semibold tracking-tight" title={s.filename}>
+                {s.filename ? fmtFilename(s.filename) : "No file"}
+              </div>
+            </div>
+            {thumb && (
+              <img src={thumb} alt="" className="h-11 w-11 shrink-0 rounded-lg border border-line bg-surface-3 object-contain" />
+            )}
+          </div>
+
           {busy ? (
             <>
-              <div className="text-[22px] font-semibold leading-none tabular-nums tracking-tight">{fmtPct(s.progress)}</div>
-              <div className="mt-1 text-[11px] text-fg-2">{s.time_left != null ? `${fmtDuration(s.time_left)} left` : "estimating…"}</div>
+              <div className="mt-1.5 flex items-baseline gap-2">
+                <span className="text-[22px] font-semibold leading-none tabular-nums tracking-tight">{fmtPct(s.progress)}</span>
+                <span className="text-[12px] text-fg-2">{s.time_left != null ? `${fmtDuration(s.time_left)} left` : "estimating…"}</span>
+              </div>
+              <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-fg/10">
+                <div
+                  className={cn("h-full rounded-full transition-[width] duration-700", s.print_state === "paused" ? "bg-warn" : "bg-accent")}
+                  style={{ width: `${Math.round(s.progress * 1000) / 10}%` }}
+                />
+              </div>
+              <dl className="mt-2 grid grid-cols-3 gap-1 text-[11px]">
+                <Stat label="ETA" value={fmtEta(s.time_left)} />
+                <Stat label="Elapsed" value={fmtDuration(s.print_duration)} />
+                <Stat label="Layer" value={s.total_layer != null ? `${s.current_layer ?? "–"}/${s.total_layer}` : "—"} />
+              </dl>
             </>
           ) : (
-            <div className="text-[13px] font-medium text-fg-2">{stateLabel(s.print_state)}</div>
-          )}
-        </ProgressRing>
-
-        <div className="min-w-0 flex-1">
-          <div className="mb-1">
-            <StateBadge snapshot={s} />
-          </div>
-          <div className="truncate text-[14px] font-semibold tracking-tight" title={s.filename}>
-            {s.filename ? fmtFilename(s.filename) : "No file"}
-          </div>
-          {busy && (
-            <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-2 gap-y-1 text-[12px]">
-              <Row icon={<Flag size={12} />} label="ETA" value={fmtEta(s.time_left)} />
-              <Row icon={<Clock size={12} />} label="Elapsed" value={fmtDuration(s.print_duration)} />
-              {s.total_layer != null && (
-                <Row icon={<Layers size={12} />} label="Layer" value={`${s.current_layer ?? "–"} / ${s.total_layer}`} />
-              )}
-            </dl>
-          )}
-          {finished && (
-            <div className="mt-1 text-[12px] text-fg-2">
+            <div className="mt-auto text-[12px] text-fg-2">
               {s.print_state === "complete" ? "in " : "after "}
               {fmtDuration(s.print_duration)} · {fmtFilament(s.filament_used)} of filament
             </div>
@@ -216,15 +227,12 @@ function JobCard({ snapshot: s }: { snapshot: Snapshot }) {
   );
 }
 
-function Row({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
+function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <>
-      <dt className="flex items-center gap-1 text-fg-3">
-        {icon}
-        {label}
-      </dt>
-      <dd className="truncate text-right tabular-nums text-fg">{value}</dd>
-    </>
+    <div className="min-w-0">
+      <dt className="text-[10px] uppercase tracking-wide text-fg-3">{label}</dt>
+      <dd className="truncate text-[12px] font-medium tabular-nums text-fg">{value}</dd>
+    </div>
   );
 }
 

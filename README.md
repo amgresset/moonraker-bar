@@ -40,7 +40,7 @@ Built with **Tauri 2** (Rust) and **React + TypeScript + Tailwind**.
 
 - **Live menu bar icon**: a ring that fills with progress, pause bars while paused, a dot when Klipper is in error. On macOS it is a template image that follows the menu bar theme, with progress and time left as text beside it (`64% · 1h02`).
 - **Popover** anchored under the icon, sized to its content, closed on blur or Escape.
-- **Job**: progress, time left, ETA as clock time, elapsed time, layers, filename.
+- **Job**: a drawing of your printer with the part growing on the bed in the filament color (a 2.4 raises its gantry, a Trident or V0 lowers its bed), the slicer thumbnail, progress, time left, ETA, elapsed time, layers.
 - **Temperatures**: every heater, sensor and temperature fan Klipper reports. You choose which tiles to show, per printer.
 - **Preheat presets** read from Mainsail and Fluidd, applied exactly as Mainsail does, plus a Cool down button.
 - **Print controls**: pause / resume, cancel (two-step), speed 50–200 %, part fan readout.
@@ -48,7 +48,8 @@ Built with **Tauri 2** (Rust) and **React + TypeScript + Tailwind**.
 - **Macros**: every public `gcode_macro` with its description. Pin the ones you want as buttons.
 - **AFC** (Armored Turtle) detected automatically: lanes with T-number, filament color, material and remaining weight, the lane in the tool, hub state, tool-change counter, load a lane, unload, `AFC_RESUME` on error.
 - **Live camera**: the webcam configured in Mainsail / Fluidd is picked up automatically and played as a live MJPEG stream (snapshot fallback every 2 s);
-- **Several printers**: fleet view, switcher, and a pin to choose which printer the menu bar follows (by default, whichever is printing).
+- **Several printers**: fleet view (printers that need attention first), switcher, and a pin to choose which printer the menu bar follows (by default, whichever is printing).
+- **Find printers on your network**: Moonraker instances are discovered automatically (mDNS, plus a scan of the local network on port 7125), added in one click.
 - **Notifications** when a print starts, pauses, finishes, is cancelled or fails.
 - **Open in Mainsail / Fluidd** from the header.
 - **Layout**: reorder and hide the panel's cards.
@@ -83,12 +84,13 @@ Moonraker Bar checks for a new version at launch and every 6 hours. When one is 
 
 ## First run
 
-Click the icon, then **Add a printer**:
+Click the icon: Moonraker Bar looks for printers on your network and lists them; click **Add** next to yours. To add one by hand, use **Add**:
 
 - **Name**: anything, e.g. `Voron 2.4`.
 - **Moonraker URL**: `http://voron.local:7125` (or the Mainsail / Fluidd URL if Moonraker sits behind nginx).
 - **API key**: only if your machine is not in `trusted_clients` in `moonraker.conf`. Create one in Mainsail or Fluidd.
 - **Web UI**: optional; defaults to the Moonraker host on port 80.
+- **Model**: the printer drawn in the panel; detected from the name and the Klipper config (gantry levelling, bed size), override it if the guess is wrong. Drawings exist for the Voron 2.4, Trident, V0, Snapmaker U1 (with its four docked toolheads in their filament colors), bed slingers and a generic CoreXY.
 - **Camera URL**: optional. The webcam set up in Mainsail / Fluidd is used automatically; enter a stream or snapshot URL here only to override it.
 
 **Test** checks the connection before saving. Presets are created in Mainsail or Fluidd and read when the printer connects. No `cors_domains` change is needed: the connection is a websocket from the app's Rust backend, not from a web page.

@@ -1,16 +1,20 @@
 import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
-import { Plus, Trash2, Pencil, Wifi, Check, Loader2, GripVertical, ChevronUp, ChevronDown, Eye, EyeOff } from "lucide-react";
+import { Plus, Trash2, Pencil, Wifi, Check, Loader2, GripVertical, ChevronUp, ChevronDown, Eye, EyeOff, Radar, X } from "lucide-react";
 import { enable, disable, isEnabled } from "@tauri-apps/plugin-autostart";
 import { useStore } from "@/store";
 import { backend } from "@/lib/backend";
-import { CARD_LABELS, resolveLayout, type CardId, type PrinterConfig, type PrinterInput, type Snapshot } from "@/lib/types";
+import { CARD_LABELS, resolveLayout, type CardId, type Discovered, type PrinterConfig, type PrinterInput, type Snapshot } from "@/lib/types";
+import { MODELS, MODEL_LABELS, guessModel } from "@/lib/model";
 import { cn } from "@/lib/format";
 import { defaultTemps, tempColor, tempLabel } from "@/lib/temps";
 import { Button, Card, Field, IconButton, Input } from "./ui";
 
+type Editing = PrinterConfig | "new" | { prefill: PrinterInput } | null;
+
 export function Settings() {
   const { printers, snapshots } = useStore();
-  const [editing, setEditing] = useState<PrinterConfig | "new" | null>(printers.length === 0 ? "new" : null);
+  const [editing, setEditing] = useState<Editing>(null);
+  const [scanning, setScanning] = useState(printers.length === 0);
 
   return (
     <div className="flex flex-col gap-3">
@@ -18,19 +22,35 @@ export function Settings() {
         <div className="mb-1.5 flex items-center justify-between">
           <h2 className="text-[11px] font-medium uppercase tracking-wide text-fg-2">Printers</h2>
           {editing === null && (
-            <Button size="sm" variant="ghost" icon={<Plus size={13} />} onClick={() => setEditing("new")}>
-              Add
-            </Button>
+            <div className="flex gap-1">
+              <Button size="sm" variant="ghost" icon={<Radar size={13} />} onClick={() => setScanning(true)} disabled={scanning}>
+                Find
+              </Button>
+              <Button size="sm" variant="ghost" icon={<Plus size={13} />} onClick={() => setEditing("new")}>
+                Add
+              </Button>
+            </div>
           )}
         </div>
 
+        {editing === null && scanning && (
+          <NetworkScan
+            onClose={() => setScanning(false)}
+            onManual={(prefill) => {
+              setScanning(false);
+              setEditing({ prefill });
+            }}
+          />
+        )}
+
         {editing !== null ? (
           <PrinterForm
-            initial={editing === "new" ? null : editing}
+            initial={editing === "new" || "prefill" in editing ? null : editing}
+            prefill={editing !== "new" && "prefill" in editing ? editing.prefill : undefined}
             onDone={() => setEditing(null)}
           />
         ) : printers.length === 0 ? (
-          <Card className="py-6 text-center text-[12px] text-fg-3">No printers yet.</Card>
+          scanning ? null : <Card className="py-6 text-center text-[12px] text-fg-3">No printers yet.</Card>
         ) : (
           <Card className="divide-y divide-line p-0">
             {printers.map((p) => {
@@ -110,14 +130,17 @@ function DeleteButton({ id }: { id: string }) {
   );
 }
 
-function PrinterForm({ initial, onDone }: { initial: PrinterConfig | null; onDone: () => void }) {
+function PrinterForm({ initial, prefill, onDone }: { initial: PrinterConfig | null; prefill?: PrinterInput; onDone: () => void }) {
+  const snapshot = useStore((st) => (initial ? st.snapshots[initial.id] : undefined));
   const [form, setForm] = useState<PrinterInput>({
-    name: initial?.name ?? "",
-    url: initial?.url ?? "http://",
+    name: initial?.name ?? prefill?.name ?? "",
+    url: initial?.url ?? prefill?.url ?? "http://",
     api_key: initial?.api_key ?? "",
     camera_url: initial?.camera_url ?? "",
     web_url: initial?.web_url ?? "",
+    model: initial?.model ?? "auto",
   });
+  const detected = initial && snapshot ? guessModel(initial, snapshot) : null;
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; text: string } | null>(null);
   const [saving, setSaving] = useState(false);
@@ -168,6 +191,20 @@ function PrinterForm({ initial, onDone }: { initial: PrinterConfig | null; onDon
         </Field>
         <Field label="Web UI" hint="Mainsail or Fluidd. Empty = the Moonraker host without its port.">
           <Input value={form.web_url ?? ""} onChange={set("web_url")} placeholder="http://voron.local" spellCheck={false} />
+        </Field>
+        <Field label="Model" hint="Picks the printer drawn in the panel.">
+          <select
+            value={form.model ?? "auto"}
+            onChange={(e) => setForm((f) => ({ ...f, model: e.target.value }))}
+            className="h-8 w-full rounded-lg border border-line bg-surface-2 px-2 text-[13px] text-fg focus:border-accent focus:outline-none"
+          >
+            <option value="auto">Auto{detected ? ` (${MODEL_LABELS[detected]})` : ""}</option>
+            {MODELS.map((m) => (
+              <option key={m} value={m}>
+                {MODEL_LABELS[m]}
+              </option>
+            ))}
+          </select>
         </Field>
         <Field label="Camera URL" hint="Optional: the webcam set up in Mainsail / Fluidd is used automatically. Stream or snapshot URL, absolute or relative to the web UI.">
           <Input value={form.camera_url ?? ""} onChange={set("camera_url")} placeholder="auto" spellCheck={false} />
@@ -347,6 +384,107 @@ function TempPicker({ printer, snapshot }: { printer: PrinterConfig; snapshot: S
       )}
     </Card>
   );
+}
+
+/** Looks for Moonraker on the local network (mDNS + subnet scan) and adds printers in one click. */
+function NetworkScan({ onClose, onManual }: { onClose: () => void; onManual: (prefill: PrinterInput) => void }) {
+  const printers = useStore((st) => st.printers);
+  const [found, setFound] = useState<Discovered[] | null>(null);
+  const [adding, setAdding] = useState<string | null>(null);
+  const [run, setRun] = useState(0);
+
+  useEffect(() => {
+    let alive = true;
+    setFound(null);
+    backend
+      .discoverPrinters()
+      .then((list) => alive && setFound(list))
+      .catch((e) => {
+        if (alive) setFound([]);
+        useStore.getState().setError(String(e));
+      });
+    return () => {
+      alive = false;
+    };
+  }, [run]);
+
+  const known = (d: Discovered) =>
+    printers.some((p) => {
+      try {
+        const h = new URL(p.url).hostname;
+        return h === d.ip || h === d.hostname || h === `${d.hostname}.local` || p.url === d.url;
+      } catch {
+        return false;
+      }
+    });
+
+  const add = async (d: Discovered) => {
+    if (d.needs_api_key) return onManual({ name: d.name, url: d.url });
+    setAdding(d.url);
+    try {
+      await backend.addPrinter({ name: prettyName(d.name), url: d.url });
+    } catch (e) {
+      useStore.getState().setError(String(e));
+    } finally {
+      setAdding(null);
+    }
+  };
+
+  return (
+    <Card className="mb-2 p-0">
+      <div className="flex items-center justify-between border-b border-line px-3 py-2">
+        <span className="flex items-center gap-1.5 text-[12px] font-medium">
+          {found === null ? <Loader2 size={13} className="animate-spin text-accent" /> : <Radar size={13} className="text-accent" />}
+          {found === null ? "Looking for printers…" : found.length ? `${found.length} found on your network` : "No printer found"}
+        </span>
+        <div className="flex gap-1">
+          {found !== null && (
+            <button onClick={() => setRun((n) => n + 1)} className="rounded px-1.5 py-0.5 text-[11px] text-fg-3 hover:bg-surface-3 hover:text-fg">
+              Again
+            </button>
+          )}
+          <IconButton title="Close" onClick={onClose} className="h-6 w-6">
+            <X size={13} />
+          </IconButton>
+        </div>
+      </div>
+      {found?.map((d) => {
+        const already = known(d);
+        return (
+          <div key={d.url} className="flex items-center gap-2.5 border-b border-line px-3 py-2 last:border-b-0">
+            <div className="min-w-0 flex-1">
+              <div className="truncate font-medium">{prettyName(d.name)}</div>
+              <div className="truncate text-[11px] text-fg-3">
+                {d.url}
+                {d.needs_api_key ? " · needs an API key" : ""}
+              </div>
+            </div>
+            {already ? (
+              <span className="flex items-center gap-1 text-[11px] text-fg-3">
+                <Check size={12} /> Added
+              </span>
+            ) : (
+              <Button size="sm" variant="primary" disabled={adding != null} onClick={() => add(d)}>
+                {adding === d.url ? <Loader2 size={12} className="animate-spin" /> : null}
+                Add
+              </Button>
+            )}
+          </div>
+        );
+      })}
+      {found !== null && found.length === 0 && (
+        <div className="px-3 py-2.5 text-[11px] leading-relaxed text-fg-3">
+          Moonraker was not found on port 7125 of this network. Add it by hand with <span className="text-fg-2">Add</span>, or enable{" "}
+          <code className="text-fg-2">[zeroconf]</code> in moonraker.conf.
+        </div>
+      )}
+    </Card>
+  );
+}
+
+/** "voron" -> "Voron", "Voron-24" stays as is. */
+function prettyName(name: string) {
+  return name && name === name.toLowerCase() ? name.charAt(0).toUpperCase() + name.slice(1) : name;
 }
 
 function AutostartRow() {

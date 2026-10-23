@@ -9,6 +9,24 @@ export interface PrinterConfig {
   web_url?: string;
   pinned_macros: string[];
   shown_temps: string[];
+  model?: string;
+}
+
+export interface Machine {
+  kinematics: string;
+  x_max: number;
+  y_max: number;
+  z_max: number;
+  leveling: string;
+}
+
+export interface Discovered {
+  name: string;
+  url: string;
+  hostname: string;
+  ip: string;
+  source: string;
+  needs_api_key: boolean;
 }
 
 /** Panel cards, in their default order. */
@@ -85,6 +103,7 @@ export interface PrinterInput {
   api_key?: string;
   camera_url?: string;
   web_url?: string;
+  model?: string;
 }
 
 export type ConnectionState = "offline" | "connecting" | "connected";
@@ -188,6 +207,12 @@ export interface Snapshot {
   afc: AfcState | null;
   temperatures: TempReading[];
   webcams: Webcam[];
+  thumbnail: string | null;
+  filament_color: string | null;
+  filament_type: string | null;
+  filament_colors: string[];
+  active_extruder: string;
+  machine: Machine;
   last_update: number;
   last_error: string | null;
 }
@@ -240,6 +265,12 @@ export const EMPTY_SNAPSHOT: Snapshot = {
   afc: null,
   temperatures: [],
   webcams: [],
+  thumbnail: null,
+  filament_color: null,
+  filament_type: null,
+  filament_colors: [],
+  active_extruder: "extruder",
+  machine: { kinematics: "", x_max: 0, y_max: 0, z_max: 0, leveling: "" },
   last_update: 0,
   last_error: null,
 };

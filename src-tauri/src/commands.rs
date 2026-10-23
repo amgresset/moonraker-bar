@@ -23,6 +23,8 @@ pub struct PrinterInput {
     pub camera_url: Option<String>,
     #[serde(default)]
     pub web_url: Option<String>,
+    #[serde(default)]
+    pub model: Option<String>,
 }
 
 impl PrinterInput {
@@ -39,6 +41,7 @@ impl PrinterInput {
             api_key: clean(self.api_key),
             camera_url: clean(self.camera_url),
             web_url: clean(self.web_url),
+            model: clean(self.model).filter(|m| m != "auto"),
             pinned_macros,
             shown_temps,
         };
@@ -84,6 +87,24 @@ pub async fn update_printer(mgr: Mgr<'_>, id: String, input: PrinterInput) -> Re
 #[tauri::command]
 pub async fn set_pinned_macros(mgr: Mgr<'_>, id: String, macros: Vec<String>) -> Result<(), String> {
     mgr.set_pinned_macros(&id, macros).await
+}
+
+/// Slicer thumbnail of a file on the printer, as a data URL (the API key stays in the backend).
+#[tauri::command]
+pub async fn get_thumbnail(mgr: Mgr<'_>, id: String, path: String) -> Result<String, String> {
+    let cfg = mgr
+        .list()
+        .await
+        .into_iter()
+        .find(|p| p.id == id)
+        .ok_or_else(|| "Unknown printer".to_string())?;
+    crate::discovery::fetch_gcode_file(&cfg.url, cfg.api_key.as_deref(), &path).await
+}
+
+/// Moonraker instances found on the local network (mDNS + subnet scan, ~3 s).
+#[tauri::command]
+pub async fn discover_printers() -> Result<Vec<crate::discovery::Discovered>, String> {
+    Ok(crate::discovery::discover().await)
 }
 
 #[tauri::command]

@@ -22,7 +22,8 @@ use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 
 use super::model::{
-    AfcKeys, ConnectionState, MacroInfo, Preset, PresetTarget, PrinterConfig, PrinterUpdate, Snapshot, TempReading, Webcam,
+    AfcKeys, ConnectionState, MacroInfo, Machine, Preset, PresetTarget, PrinterConfig, PrinterUpdate, Snapshot, TempReading,
+    Webcam,
 };
 
 type Ws = WebSocketStream<MaybeTlsStream<TcpStream>>;
@@ -50,6 +51,7 @@ fn subscription_objects(chamber_key: Option<&str>, afc: Option<&AfcKeys>, temps:
         "heater_bed": ["temperature", "target", "power"],
         "fan": ["speed"],
         "gcode_move": ["speed_factor", "extrude_factor"],
+        "toolhead": ["extruder"],
     });
     if let Some(key) = chamber_key {
         objects[key] = Value::Null;
@@ -292,6 +294,28 @@ impl Session {
             .and_then(|v| v.pointer("/status/configfile/settings").cloned())
             .unwrap_or(Value::Null);
 
+        // Machine shape, for the illustration.
+        let num = |section: &str, key: &str| {
+            settings.get(section).and_then(|s| s.get(key)).and_then(Value::as_f64).unwrap_or(0.0)
+        };
+        let machine = Machine {
+            kinematics: settings
+                .pointer("/printer/kinematics")
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .to_string(),
+            x_max: num("stepper_x", "position_max"),
+            y_max: num("stepper_y", "position_max"),
+            z_max: num("stepper_z", "position_max"),
+            leveling: if objects.iter().any(|o| o == "quad_gantry_level") {
+                "qgl".into()
+            } else if objects.iter().any(|o| o == "z_tilt") {
+                "z_tilt".into()
+            } else {
+                String::new()
+            },
+        };
+
         let macros: Vec<MacroInfo> = names
             .into_iter()
             .map(|name| {
@@ -308,6 +332,7 @@ impl Session {
 
         let mut s = self.snapshot.write().await;
         s.macros = macros;
+        s.machine = machine;
     }
 
     async fn apply_status(&mut self, status: &Value) {
@@ -329,6 +354,10 @@ impl Session {
             s.estimated_time = None;
             s.current_layer = None;
             s.total_layer = None;
+            s.thumbnail = None;
+            s.filament_color = None;
+            s.filament_colors.clear();
+            s.filament_type = None;
             s.recompute_time_left();
             return;
         }
@@ -343,6 +372,22 @@ impl Session {
         if s.total_layer.is_none() {
             s.total_layer = meta.get("layer_count").and_then(Value::as_u64).map(|n| n as u32);
         }
+        s.thumbnail = pick_thumbnail(filename, &meta);
+        s.filament_color = meta
+            .get("filament_colors")
+            .and_then(Value::as_array)
+            .and_then(|a| a.iter().filter_map(Value::as_str).find(|c| !c.trim().is_empty()))
+            .map(|c| c.trim().to_string());
+        s.filament_colors = meta
+            .get("filament_colors")
+            .and_then(Value::as_array)
+            .map(|a| a.iter().filter_map(Value::as_str).map(|c| c.trim().to_string()).collect())
+            .unwrap_or_default();
+        s.filament_type = meta
+            .get("filament_type")
+            .and_then(Value::as_str)
+            .map(|t| t.split(';').next().unwrap_or(t).trim().to_string())
+            .filter(|t| !t.is_empty());
         s.recompute_time_left();
     }
 
@@ -503,6 +548,22 @@ async fn load_presets(rpc: &Rpc, snapshot: &Arc<RwLock<Snapshot>>) {
     let mut s = snapshot.write().await;
     s.presets = presets;
     s.cooldown_gcode = if cooldown.is_empty() { "TURN_OFF_HEATERS".into() } else { cooldown };
+}
+
+/// The slicer thumbnail closest to 300 px wide, as a path under the `gcodes` root.
+/// Thumbnail paths in the metadata are relative to the G-code file's folder.
+fn pick_thumbnail(filename: &str, meta: &Value) -> Option<String> {
+    let thumbs = meta.get("thumbnails")?.as_array()?;
+    let best = thumbs
+        .iter()
+        .filter_map(|t| {
+            let w = t.get("width")?.as_u64()?;
+            let p = t.get("relative_path")?.as_str()?;
+            Some((w, p))
+        })
+        .min_by_key(|(w, _)| (*w as i64 - 300).abs())?;
+    let dir = filename.rsplit_once('/').map(|(d, _)| d).unwrap_or("");
+    Some(if dir.is_empty() { best.1.to_string() } else { format!("{dir}/{}", best.1) })
 }
 
 /// Read the webcams Moonraker knows about (`server.webcams.list`). Missing on old
