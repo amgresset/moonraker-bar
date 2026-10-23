@@ -8,7 +8,7 @@
 <p align="center">
   <a href="https://github.com/modship/moonraker-bar/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/modship/moonraker-bar?sort=semver"></a>
   <img alt="Platforms" src="https://img.shields.io/badge/platforms-macOS%20%7C%20Linux%20%7C%20Windows-555">
-  <img alt="License" src="https://img.shields.io/badge/license-MIT-555">
+  <img alt="License" src="https://img.shields.io/badge/license-GPL--3.0-555">
 </p>
 
 <p align="center">
@@ -124,4 +124,4 @@ npm run icons         # regenerate src-tauri/icons/* from app-icon.svg
 
 ## License
 
-MIT
+[GPL-3.0](LICENSE). You can use, study, modify and share Moonraker Bar; any distributed version, modified or not, must stay open source under the same license.
