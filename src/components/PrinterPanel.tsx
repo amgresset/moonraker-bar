@@ -279,12 +279,22 @@ function Presets({ printer, snapshot: s }: { printer: PrinterConfig; snapshot: S
   const heating = s.extruder.target > 0 || s.bed.target > 0 || (s.chamber?.target ?? 0) > 0;
   if (s.presets.length === 0 && !heating) return null;
 
-  const isActive = (p: (typeof s.presets)[number]) =>
-    p.targets.length > 0 &&
-    p.targets.every((t) => {
-      const h = t.object === "extruder" ? s.extruder : t.object === "heater_bed" ? s.bed : t.object.includes("chamber") ? s.chamber : null;
-      return h == null || Math.abs(h.target - t.value) < 0.5;
-    });
+  // A preset is "active" when every one of its heater targets is the current
+  // setpoint, and at least one of them is actually heating. Targets we cannot
+  // map to a known heater (temperature fans, extra heaters) never match.
+  const heaterFor = (object: string) =>
+    object === "extruder" ? s.extruder : object === "heater_bed" ? s.bed : /^heater_generic .*chamber/i.test(object) ? s.chamber : null;
+  const isActive = (p: (typeof s.presets)[number]) => {
+    const heaters = p.targets.filter((t) => t.kind !== "temperature_fan");
+    if (heaters.length === 0) return false;
+    let hot = false;
+    for (const t of heaters) {
+      const h = heaterFor(t.object);
+      if (!h || Math.abs(h.target - t.value) >= 0.5) return false;
+      if (t.value > 0 && h.target > 0) hot = true;
+    }
+    return hot;
+  };
 
   return (
     <div className="flex flex-wrap items-center gap-1.5">
