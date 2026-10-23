@@ -22,7 +22,9 @@ import {
 } from "lucide-react";
 import { useStore, useSelectedPrinter } from "@/store";
 import { backend } from "@/lib/backend";
-import { isBusy, type PrinterAction, type PrinterConfig, type Snapshot } from "@/lib/types";
+import { isBusy, type PrinterConfig, type Snapshot } from "@/lib/types";
+import { useAction } from "@/lib/useAction";
+import { AfcCard } from "./Afc";
 import { cn, fmtDuration, fmtEta, fmtFilename, fmtPct, fmtTemp, fmtFilament } from "@/lib/format";
 import { ProgressRing } from "./ProgressRing";
 import { Badge, Button, Card, Input } from "./ui";
@@ -58,6 +60,7 @@ export function PrinterPanel() {
       )}
       <Temperatures printer={printer} snapshot={snapshot} />
       {busy && <Controls printer={printer} snapshot={snapshot} />}
+      {snapshot.afc && <AfcCard printer={printer} snapshot={snapshot} afc={snapshot.afc} />}
       <Macros printer={printer} snapshot={snapshot} />
       <CameraCard printer={printer} />
       <QuickActions printer={printer} snapshot={snapshot} />
@@ -337,22 +340,6 @@ function Presets({ printer, snapshot: s }: { printer: PrinterConfig; snapshot: S
 }
 
 const SPEEDS = [50, 100, 150, 200];
-
-/** Runs a printer action and tracks which one is in flight. */
-function useAction(printerId: string) {
-  const [pending, setPending] = useState<string | null>(null);
-  const run = async (action: PrinterAction, arg?: string) => {
-    setPending(arg ? `${action}:${arg}` : action);
-    try {
-      await backend.action(printerId, action, arg);
-    } catch (e) {
-      useStore.getState().setError(String(e));
-    } finally {
-      setPending(null);
-    }
-  };
-  return { pending, run };
-}
 
 function Controls({ printer, snapshot: s }: { printer: PrinterConfig; snapshot: Snapshot }) {
   const { pending, run } = useAction(printer.id);

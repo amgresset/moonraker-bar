@@ -46,6 +46,61 @@ export type PrintState =
   | "cancelled"
   | "error";
 
+export interface AfcLane {
+  object: string;
+  name: string;
+  unit: string;
+  hub: string;
+  extruder: string;
+  index: number;
+  map: string;
+  load: boolean;
+  prep: boolean;
+  tool_loaded: boolean;
+  loaded_to_hub: boolean;
+  material: string;
+  color: string;
+  filament_name: string;
+  weight: number;
+  spool_id: number | null;
+  filament_status: "In Tool" | "Ready" | "Prep" | "Not Ready" | string;
+  status: string;
+  runout_lane: string;
+  extruder_temp: number;
+}
+
+export interface AfcHub {
+  object: string;
+  name: string;
+  state: boolean;
+}
+
+export interface AfcExtruder {
+  object: string;
+  name: string;
+  lane_loaded: string;
+  tool_start_status: boolean | null;
+  tool_end_status: boolean | null;
+}
+
+export interface AfcState {
+  current_load: string | null;
+  current_lane: string | null;
+  next_lane: string | null;
+  current_state: string;
+  error_state: boolean;
+  bypass_state: boolean;
+  current_toolchange: number;
+  number_of_toolchanges: number;
+  spoolman: boolean;
+  message: string;
+  message_type: string;
+  units: string[];
+  lanes: AfcLane[];
+  hubs: AfcHub[];
+  extruders: AfcExtruder[];
+}
+
 export interface Heater {
   temperature: number;
   target: number;
@@ -78,6 +133,7 @@ export interface Snapshot {
   macros: MacroInfo[];
   presets: Preset[];
   cooldown_gcode: string;
+  afc: AfcState | null;
   last_update: number;
   last_error: string | null;
 }
@@ -127,6 +183,7 @@ export const EMPTY_SNAPSHOT: Snapshot = {
   macros: [],
   presets: [],
   cooldown_gcode: "",
+  afc: null,
   last_update: 0,
   last_error: null,
 };

@@ -21,7 +21,7 @@ use tokio_tungstenite::tungstenite::http::HeaderValue;
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 
-use super::model::{ConnectionState, MacroInfo, Preset, PresetTarget, PrinterConfig, PrinterUpdate, Snapshot};
+use super::model::{AfcKeys, ConnectionState, MacroInfo, Preset, PresetTarget, PrinterConfig, PrinterUpdate, Snapshot};
 
 type Ws = WebSocketStream<MaybeTlsStream<TcpStream>>;
 type WsSink = SplitSink<Ws, Message>;
@@ -38,7 +38,7 @@ const KEEPALIVE: Duration = Duration::from_secs(20);
 const MAX_BACKOFF_SECS: u64 = 15;
 
 /// Printer objects we subscribe to. `None` means "every field".
-fn subscription_objects(chamber_key: Option<&str>) -> Value {
+fn subscription_objects(chamber_key: Option<&str>, afc: Option<&AfcKeys>) -> Value {
     let mut objects = json!({
         "webhooks": null,
         "print_stats": null,
@@ -51,6 +51,9 @@ fn subscription_objects(chamber_key: Option<&str>) -> Value {
     });
     if let Some(key) = chamber_key {
         objects[key] = Value::Null;
+    }
+    if let Some(afc) = afc {
+        afc.subscription(&mut objects);
     }
     objects
 }
@@ -174,6 +177,7 @@ struct Session {
     snapshot: Arc<RwLock<Snapshot>>,
     updates: mpsc::Sender<PrinterUpdate>,
     chamber_key: Option<String>,
+    afc_keys: Option<AfcKeys>,
     metadata_for: String,
 }
 
@@ -228,6 +232,11 @@ impl Session {
             })
             .cloned();
 
+        self.afc_keys = AfcKeys::from_objects(&objects);
+        if self.afc_keys.is_none() {
+            self.snapshot.write().await.afc = None;
+        }
+
         self.discover_macros(&objects).await;
         load_presets(&self.rpc, &self.snapshot).await;
 
@@ -235,7 +244,7 @@ impl Session {
             .rpc
             .call(
                 "printer.objects.subscribe",
-                json!({ "objects": subscription_objects(self.chamber_key.as_deref()) }),
+                json!({ "objects": subscription_objects(self.chamber_key.as_deref(), self.afc_keys.as_ref()) }),
             )
             .await?;
         if let Some(status) = res.get("status") {
@@ -284,7 +293,7 @@ impl Session {
     async fn apply_status(&mut self, status: &Value) {
         let filename = {
             let mut s = self.snapshot.write().await;
-            s.apply_status(status, self.chamber_key.as_deref());
+            s.apply_status(status, self.chamber_key.as_deref(), self.afc_keys.as_ref());
             s.filename.clone()
         };
         if filename != self.metadata_for {
@@ -560,6 +569,7 @@ async fn session(
         snapshot: snapshot.clone(),
         updates: updates.clone(),
         chamber_key: None,
+        afc_keys: None,
         metadata_for: String::new(),
     };
 
