@@ -16,6 +16,8 @@
     "autostart:default",
     "notification:default",
     "positioner:default",
-    "store:default"
+    "store:default",
+    "updater:default",
+    "process:allow-restart"
   ]
 }

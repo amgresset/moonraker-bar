@@ -44,6 +44,18 @@
     ],
     "macOS": {
       "minimumSystemVersion": "12.0"
+    },
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEZEQUFFMUNGQ0ZENTcyRkQKUldUOWN0WFB6K0dxL1kxS2N2OVB0K1kvc3hVeHlRNXRiVDUxY3BaMVZpYkhSTEtyaDkzRmtIeU8K",
+      "endpoints": [
+        "https://github.com/GITHUB_OWNER/moonraker-bar/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
     }
   }
 }
