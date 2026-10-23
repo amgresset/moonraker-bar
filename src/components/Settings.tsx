@@ -1,9 +1,9 @@
 import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
-import { Plus, Trash2, Pencil, Wifi, Check, Loader2 } from "lucide-react";
+import { Plus, Trash2, Pencil, Wifi, Check, Loader2, GripVertical, ChevronUp, ChevronDown, Eye, EyeOff } from "lucide-react";
 import { enable, disable, isEnabled } from "@tauri-apps/plugin-autostart";
 import { useStore } from "@/store";
 import { backend } from "@/lib/backend";
-import type { PrinterConfig, PrinterInput, Snapshot } from "@/lib/types";
+import { CARD_LABELS, resolveLayout, type CardId, type PrinterConfig, type PrinterInput, type Snapshot } from "@/lib/types";
 import { cn } from "@/lib/format";
 import { defaultTemps, tempColor, tempLabel } from "@/lib/temps";
 import { Button, Card, Field, IconButton, Input } from "./ui";
@@ -65,6 +65,13 @@ export function Settings() {
               <TempPicker key={p.id} printer={p} snapshot={snapshots[p.id]} />
             ))}
           </div>
+        </section>
+      )}
+
+      {editing === null && (
+        <section>
+          <h2 className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-fg-2">Layout</h2>
+          <LayoutEditor />
         </section>
       )}
 
@@ -185,6 +192,91 @@ function PrinterForm({ initial, onDone }: { initial: PrinterConfig | null; onDon
           </Button>
         </div>
       </form>
+    </Card>
+  );
+}
+
+/** Reorder the panel's cards (drag, or arrows) and hide the ones you don't need. */
+function LayoutEditor() {
+  const { layout, saveLayout } = useStore();
+  const { order, hidden } = resolveLayout(layout);
+  const [dragging, setDragging] = useState<CardId | null>(null);
+  const [over, setOver] = useState<CardId | null>(null);
+
+  const commit = (nextOrder: CardId[], nextHidden: Set<CardId>) =>
+    saveLayout({ order: nextOrder, hidden: [...nextHidden] }).catch((e) => useStore.getState().setError(String(e)));
+
+  const move = (id: CardId, to: number) => {
+    const next = order.filter((c) => c !== id);
+    next.splice(Math.max(0, Math.min(next.length, to)), 0, id);
+    commit(next, hidden);
+  };
+
+  const toggle = (id: CardId) => {
+    const next = new Set(hidden);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    commit(order, next);
+  };
+
+  const isDefault = layout.order.length === 0 && layout.hidden.length === 0;
+
+  return (
+    <Card className="p-0">
+      <ul className="divide-y divide-line">
+        {order.map((id, i) => {
+          const off = hidden.has(id);
+          return (
+            <li
+              key={id}
+              draggable
+              onDragStart={(e) => {
+                setDragging(id);
+                e.dataTransfer.effectAllowed = "move";
+              }}
+              onDragOver={(e) => {
+                e.preventDefault();
+                if (over !== id) setOver(id);
+              }}
+              onDragLeave={() => setOver((o) => (o === id ? null : o))}
+              onDrop={(e) => {
+                e.preventDefault();
+                if (dragging && dragging !== id) move(dragging, order.indexOf(id));
+                setDragging(null);
+                setOver(null);
+              }}
+              onDragEnd={() => {
+                setDragging(null);
+                setOver(null);
+              }}
+              className={cn(
+                "flex items-center gap-2 px-2.5 py-1.5 transition",
+                dragging === id && "opacity-40",
+                over === id && dragging !== id && "bg-accent/10",
+              )}
+            >
+              <GripVertical size={14} className="shrink-0 cursor-grab text-fg-3" aria-hidden="true" />
+              <span className={cn("flex-1 text-[13px]", off && "text-fg-3 line-through")}>{CARD_LABELS[id]}</span>
+              <IconButton title="Move up" disabled={i === 0} onClick={() => move(id, i - 1)} className="h-6 w-6">
+                <ChevronUp size={13} />
+              </IconButton>
+              <IconButton title="Move down" disabled={i === order.length - 1} onClick={() => move(id, i + 1)} className="h-6 w-6">
+                <ChevronDown size={13} />
+              </IconButton>
+              <IconButton title={off ? "Show" : "Hide"} onClick={() => toggle(id)} className={cn("h-6 w-6", off && "text-fg-3")}>
+                {off ? <EyeOff size={13} /> : <Eye size={13} />}
+              </IconButton>
+            </li>
+          );
+        })}
+      </ul>
+      {!isDefault && (
+        <div className="border-t border-line px-2.5 py-1.5 text-right">
+          <button onClick={() => commit([], new Set())} className="text-[11px] text-fg-3 hover:text-fg">
+            Reset to default
+          </button>
+        </div>
+      )}
     </Card>
   );
 }

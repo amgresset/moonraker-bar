@@ -3,6 +3,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
+  Layout,
   PrinterAction,
   PrinterConfig,
   PrinterInput,
@@ -21,6 +22,8 @@ export const backend = {
     invoke<void>("set_pinned_macros", { id, macros }),
   setShownTemps: (id: string, objects: string[]) =>
     invoke<void>("set_shown_temps", { id, objects }),
+  getLayout: () => invoke<Layout>("get_layout"),
+  setLayout: (layout: Layout) => invoke<void>("set_layout", { layout }),
   getActivePrinter: () => invoke<string | null>("get_active_printer"),
   setActivePrinter: (id: string | null) => invoke<void>("set_active_printer", { id }),
   action: (id: string, action: PrinterAction, arg?: string) =>

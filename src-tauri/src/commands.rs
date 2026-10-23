@@ -6,7 +6,7 @@ use std::sync::Arc;
 use serde::Deserialize;
 use tauri::{AppHandle, State};
 
-use crate::manager::Manager;
+use crate::manager::{Layout, Manager};
 use crate::moonraker::{self, Action, PrinterConfig, Snapshot};
 use crate::tray;
 
@@ -84,6 +84,17 @@ pub async fn update_printer(mgr: Mgr<'_>, id: String, input: PrinterInput) -> Re
 #[tauri::command]
 pub async fn set_pinned_macros(mgr: Mgr<'_>, id: String, macros: Vec<String>) -> Result<(), String> {
     mgr.set_pinned_macros(&id, macros).await
+}
+
+#[tauri::command]
+pub async fn get_layout(mgr: Mgr<'_>) -> Result<Layout, String> {
+    Ok(mgr.layout().await)
+}
+
+#[tauri::command]
+pub async fn set_layout(mgr: Mgr<'_>, layout: Layout) -> Result<(), String> {
+    mgr.set_layout(layout).await;
+    Ok(())
 }
 
 #[tauri::command]

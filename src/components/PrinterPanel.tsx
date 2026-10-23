@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import { useStore, useSelectedPrinter } from "@/store";
 import { backend } from "@/lib/backend";
-import { isBusy, type PrinterConfig, type Snapshot } from "@/lib/types";
+import { isBusy, resolveLayout, type CardId, type PrinterConfig, type Snapshot } from "@/lib/types";
 import { useAction } from "@/lib/useAction";
 import { tempColor, tempLabel, visibleTemps } from "@/lib/temps";
 import { AfcCard } from "./Afc";
@@ -33,6 +33,7 @@ import { Badge, Button, Card, Input } from "./ui";
 export function PrinterPanel() {
   const { printer, snapshot } = useSelectedPrinter();
   const setView = useStore((s) => s.setView);
+  const layout = useStore((s) => s.layout);
 
   if (!printer) {
     return (
@@ -50,21 +51,37 @@ export function PrinterPanel() {
   }
 
   const busy = isBusy(snapshot);
+  const { order, hidden } = resolveLayout(layout);
+
+  const cards: Record<CardId, ReactNode> = {
+    job: (
+      <>
+        <JobCard snapshot={snapshot} />
+        {snapshot.message && snapshot.message !== snapshot.filename && (
+          <div className="truncate rounded-lg bg-surface-3 px-3 py-1.5 text-[12px] text-fg-2" title={snapshot.message}>
+            {snapshot.message}
+          </div>
+        )}
+      </>
+    ),
+    temps: <Temperatures printer={printer} snapshot={snapshot} />,
+    controls: busy ? <Controls printer={printer} snapshot={snapshot} /> : null,
+    afc: snapshot.afc ? <AfcCard printer={printer} snapshot={snapshot} afc={snapshot.afc} /> : null,
+    macros: <Macros printer={printer} snapshot={snapshot} />,
+    camera: <CameraCard printer={printer} />,
+    actions: <QuickActions printer={printer} snapshot={snapshot} />,
+  };
+
   return (
     <div className="flex flex-col gap-2.5">
       {snapshot.klippy_state !== "ready" && <KlippyBanner printer={printer} snapshot={snapshot} />}
-      <JobCard snapshot={snapshot} />
-      {snapshot.message && snapshot.message !== snapshot.filename && (
-        <div className="truncate rounded-lg bg-surface-3 px-3 py-1.5 text-[12px] text-fg-2" title={snapshot.message}>
-          {snapshot.message}
-        </div>
-      )}
-      <Temperatures printer={printer} snapshot={snapshot} />
-      {busy && <Controls printer={printer} snapshot={snapshot} />}
-      {snapshot.afc && <AfcCard printer={printer} snapshot={snapshot} afc={snapshot.afc} />}
-      <Macros printer={printer} snapshot={snapshot} />
-      <CameraCard printer={printer} />
-      <QuickActions printer={printer} snapshot={snapshot} />
+      {order
+        .filter((id) => !hidden.has(id) && cards[id] != null)
+        .map((id) => (
+          <div key={id} className="contents">
+            {cards[id]}
+          </div>
+        ))}
     </div>
   );
 }

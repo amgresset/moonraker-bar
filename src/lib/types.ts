@@ -11,6 +11,33 @@ export interface PrinterConfig {
   shown_temps: string[];
 }
 
+/** Panel cards, in their default order. */
+export const CARD_IDS = ["job", "temps", "controls", "afc", "macros", "camera", "actions"] as const;
+export type CardId = (typeof CARD_IDS)[number];
+
+export const CARD_LABELS: Record<CardId, string> = {
+  job: "Job",
+  temps: "Temperatures & presets",
+  controls: "Print controls",
+  afc: "AFC",
+  macros: "Macros",
+  camera: "Camera",
+  actions: "Quick actions",
+};
+
+export interface Layout {
+  order: string[];
+  hidden: string[];
+}
+
+/** Effective card order: saved order first, then any card it doesn't know about. */
+export function resolveLayout(layout: Layout): { order: CardId[]; hidden: Set<CardId> } {
+  const known = new Set<string>(CARD_IDS);
+  const order = layout.order.filter((c): c is CardId => known.has(c));
+  for (const c of CARD_IDS) if (!order.includes(c)) order.push(c);
+  return { order, hidden: new Set(layout.hidden.filter((c): c is CardId => known.has(c))) };
+}
+
 export type TempKind = "extruder" | "heater_bed" | "heater_generic" | "temperature_sensor" | "temperature_fan";
 
 export interface TempReading {

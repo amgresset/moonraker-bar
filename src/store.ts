@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { useShallow } from "zustand/react/shallow";
 import { backend } from "./lib/backend";
-import { EMPTY_SNAPSHOT, type PrinterConfig, type Snapshot, isBusy } from "./lib/types";
+import { EMPTY_SNAPSHOT, type Layout, type PrinterConfig, type Snapshot, isBusy } from "./lib/types";
 
 export type View = "panel" | "fleet" | "settings";
 
@@ -15,8 +15,10 @@ interface State {
   selectedId: string | null;
   view: View;
   error: string | null;
+  layout: Layout;
 
   init: () => Promise<void>;
+  saveLayout: (layout: Layout) => Promise<void>;
   select: (id: string) => void;
   pin: (id: string | null) => Promise<void>;
   setView: (v: View) => void;
@@ -33,17 +35,24 @@ export const useStore = create<State>((set, get) => ({
   selectedId: null,
   view: "panel",
   error: null,
+  layout: { order: [], hidden: [] },
+
+  saveLayout: async (layout) => {
+    set({ layout });
+    await backend.setLayout(layout);
+  },
 
   init: async () => {
     unlisten.forEach((u) => u());
     unlisten = [];
 
-    const [printers, snapshots, activeId] = await Promise.all([
+    const [printers, snapshots, activeId, layout] = await Promise.all([
       backend.listPrinters(),
       backend.getSnapshots(),
       backend.getActivePrinter(),
+      backend.getLayout().catch(() => ({ order: [], hidden: [] })),
     ]);
-    set({ printers, snapshots, activeId, ready: true, view: printers.length ? "panel" : "settings" });
+    set({ printers, snapshots, activeId, layout, ready: true, view: printers.length ? "panel" : "settings" });
     set({ selectedId: pickSelected(get()) });
 
     unlisten.push(

@@ -16,6 +16,17 @@ use crate::tray;
 const STORE_FILE: &str = "settings.json";
 const KEY_PRINTERS: &str = "printers";
 const KEY_ACTIVE: &str = "active";
+const KEY_LAYOUT: &str = "layout";
+
+/// Which cards the panel shows, and in what order. Keys are the card ids the
+/// front knows: job, temps, controls, afc, macros, camera, actions.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default, PartialEq)]
+pub struct Layout {
+    #[serde(default)]
+    pub order: Vec<String>,
+    #[serde(default)]
+    pub hidden: Vec<String>,
+}
 
 pub struct PrinterHandle {
     pub cfg: PrinterConfig,
@@ -29,6 +40,7 @@ pub struct Manager {
     printers: Mutex<Vec<PrinterHandle>>,
     /// Printer the tray follows. `None` = whichever is busy, else the first one.
     active: Mutex<Option<String>>,
+    layout: Mutex<Layout>,
     updates_tx: mpsc::Sender<PrinterUpdate>,
     /// Last known `print_state` per printer, for transition notifications.
     last_states: Mutex<HashMap<String, String>>,
@@ -42,6 +54,7 @@ impl Manager {
             app,
             printers: Mutex::new(Vec::new()),
             active: Mutex::new(None),
+            layout: Mutex::new(Layout::default()),
             updates_tx: tx,
             last_states: Mutex::new(HashMap::new()),
             last_tray: Mutex::new(None),
@@ -55,7 +68,7 @@ impl Manager {
 
     /// Read the store and start a client for every saved printer.
     pub async fn load(&self) {
-        let (configs, active) = match self.app.store(STORE_FILE) {
+        let (configs, active, layout) = match self.app.store(STORE_FILE) {
             Ok(store) => {
                 let configs: Vec<PrinterConfig> = store
                     .get(KEY_PRINTERS)
@@ -65,14 +78,19 @@ impl Manager {
                     .get(KEY_ACTIVE)
                     .and_then(|v| serde_json::from_value(v).ok())
                     .unwrap_or(None);
-                (configs, active)
+                let layout: Layout = store
+                    .get(KEY_LAYOUT)
+                    .and_then(|v| serde_json::from_value(v).ok())
+                    .unwrap_or_default();
+                (configs, active, layout)
             }
             Err(e) => {
                 log::error!("store unavailable: {e}");
-                (Vec::new(), None)
+                (Vec::new(), None, Layout::default())
             }
         };
         *self.active.lock().await = active;
+        *self.layout.lock().await = layout;
         for cfg in configs {
             self.spawn(cfg).await;
         }
@@ -83,10 +101,12 @@ impl Manager {
         let printers: Vec<PrinterConfig> =
             self.printers.lock().await.iter().map(|h| h.cfg.clone()).collect();
         let active = self.active.lock().await.clone();
+        let layout = self.layout.lock().await.clone();
         match self.app.store(STORE_FILE) {
             Ok(store) => {
                 store.set(KEY_PRINTERS, json!(printers));
                 store.set(KEY_ACTIVE, json!(active));
+                store.set(KEY_LAYOUT, json!(layout));
                 if let Err(e) = store.save() {
                     log::error!("store save failed: {e}");
                 }
@@ -216,6 +236,15 @@ impl Manager {
         self.persist().await;
         self.emit_printers().await;
         Ok(())
+    }
+
+    pub async fn layout(&self) -> Layout {
+        self.layout.lock().await.clone()
+    }
+
+    pub async fn set_layout(&self, layout: Layout) {
+        *self.layout.lock().await = layout;
+        self.persist().await;
     }
 
     pub async fn active(&self) -> Option<String> {

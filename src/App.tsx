@@ -1,5 +1,5 @@
-import { useEffect, useLayoutEffect, useRef } from "react";
-import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { currentMonitor, getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { Settings as SettingsIcon, X, Power, ChevronLeft, ExternalLink } from "lucide-react";
 import { useStore, useSelectedPrinter } from "./store";
@@ -13,7 +13,8 @@ import { IconButton } from "./components/ui";
 
 const WIDTH = 360;
 const MIN_HEIGHT = 220;
-const MAX_HEIGHT = 700;
+/** Room left for the menu bar / taskbar and a margin, in logical px. */
+const SCREEN_MARGIN = 48;
 
 export default function App() {
   const { ready, view, setView, error, setError, printers } = useStore();
@@ -34,13 +35,27 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  // Size the native window to the content, so the popover never shows dead space.
+  // Size the native window to the content, so the popover never shows dead space
+  // and never needs a scrollbar as long as it fits on screen.
+  const [maxHeight, setMaxHeight] = useState(900);
+  useEffect(() => {
+    const refresh = () =>
+      currentMonitor()
+        .then((m) => {
+          if (m) setMaxHeight(Math.max(MIN_HEIGHT, Math.floor(m.size.height / m.scaleFactor) - SCREEN_MARGIN));
+        })
+        .catch(() => {});
+    refresh();
+    window.addEventListener("focus", refresh);
+    return () => window.removeEventListener("focus", refresh);
+  }, []);
+
   useLayoutEffect(() => {
     const el = rootRef.current;
     if (!el) return;
     let last = 0;
     const apply = () => {
-      const h = Math.min(MAX_HEIGHT, Math.max(MIN_HEIGHT, Math.ceil(el.getBoundingClientRect().height)));
+      const h = Math.min(maxHeight, Math.max(MIN_HEIGHT, Math.ceil(el.getBoundingClientRect().height)));
       if (h === last) return;
       last = h;
       getCurrentWindow()
@@ -51,7 +66,7 @@ export default function App() {
     ro.observe(el);
     apply();
     return () => ro.disconnect();
-  }, []);
+  }, [maxHeight]);
 
   const multi = printers.length > 1;
   const title = view === "settings" ? "Settings" : view === "fleet" ? "Printers" : null;
@@ -63,7 +78,7 @@ export default function App() {
         "flex flex-col overflow-hidden rounded-[var(--radius-popover)]",
         "border border-line bg-surface text-fg",
       )}
-      style={{ maxHeight: MAX_HEIGHT }}
+      style={{ maxHeight }}
     >
       <header className="drag flex items-center gap-1 px-3 pt-2.5 pb-2">
         {view === "panel" ? (
