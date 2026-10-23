@@ -65,11 +65,17 @@ Download the file for your system from the [latest release](https://github.com/m
 | Linux | `…_amd64.AppImage` | `chmod +x` then run. This is the only Linux build that updates itself. |
 | Debian / Ubuntu | `…_amd64.deb` | `sudo apt install ./<file>.deb`. Updated through new `.deb` files, not in-app. |
 
-**macOS, first launch.** Builds are not yet signed with an Apple Developer ID, so Gatekeeper refuses to open the app the first time. Either right-click the app → **Open** → **Open**, or run once:
+**macOS, first launch.** Builds are not yet signed with an Apple Developer ID, so macOS blocks the app the first time with *"Moonraker Bar" Not Opened*. Click **Done** (not *Move to Trash*), then either:
 
-```bash
-xattr -cr "/Applications/Moonraker Bar.app"
-```
+- run once in Terminal:
+
+  ```bash
+  xattr -dr com.apple.quarantine "/Applications/Moonraker Bar.app"
+  ```
+
+- or open **System Settings → Privacy & Security**, scroll down to *"Moonraker Bar" was blocked* and click **Open Anyway**.
+
+This is needed once per install; updates installed from the app are not blocked.
 
 ### Updates
 
