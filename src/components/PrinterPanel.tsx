@@ -344,7 +344,7 @@ function QuickActions({ printer, snapshot: s }: { printer: PrinterConfig; snapsh
   return (
     <div className="flex items-center gap-2">
       <Button
-        className="flex-1"
+        className="flex-1 whitespace-nowrap"
         icon={homing ? <Loader2 size={14} className="animate-spin" /> : <Home size={14} />}
         disabled={lockMotion}
         title={busy ? "Indisponible pendant une impression" : "G28 — origine de tous les axes"}
@@ -353,21 +353,21 @@ function QuickActions({ printer, snapshot: s }: { printer: PrinterConfig; snapsh
         Home
       </Button>
       <Button
-        className="flex-1"
+        className="flex-1 whitespace-nowrap"
         icon={motorsOff ? <Loader2 size={14} className="animate-spin" /> : <Unplug size={14} />}
         disabled={lockMotion}
         title={busy ? "Indisponible pendant une impression" : "M84 — couper les moteurs"}
         onClick={() => run("gcode", "M84")}
       >
-        Moteurs off
+        Moteurs
       </Button>
       <ConfirmButton
         label="Stop"
-        confirmLabel="Confirmer ?"
+        confirmLabel="Sûr ?"
         icon={<AlertTriangle size={14} />}
-        disabled={pending != null}
+        disabled={pending === "estop"}
         onConfirm={() => run("estop")}
-        className="flex-1 bg-danger text-white hover:bg-danger hover:brightness-110"
+        className="flex-1 whitespace-nowrap bg-danger text-white hover:bg-danger hover:brightness-110"
         title="Arrêt d'urgence Klipper (nécessite un Firmware restart ensuite)"
       />
     </div>

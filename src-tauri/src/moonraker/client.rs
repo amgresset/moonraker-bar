@@ -30,6 +30,9 @@ type RpcResult = Result<Value, String>;
 type Pending = Arc<Mutex<HashMap<u64, oneshot::Sender<RpcResult>>>>;
 
 const RPC_TIMEOUT: Duration = Duration::from_secs(10);
+/// G-code scripts only answer once Klipper has finished executing them, so a
+/// homing, a QGL or a heat-soak macro can legitimately take minutes.
+const GCODE_TIMEOUT: Duration = Duration::from_secs(15 * 60);
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(8);
 const KEEPALIVE: Duration = Duration::from_secs(20);
 const MAX_BACKOFF_SECS: u64 = 15;
@@ -79,6 +82,10 @@ struct Rpc {
 
 impl Rpc {
     async fn call(&self, method: &str, params: Value) -> RpcResult {
+        self.call_with_timeout(method, params, RPC_TIMEOUT).await
+    }
+
+    async fn call_with_timeout(&self, method: &str, params: Value, timeout: Duration) -> RpcResult {
         let id = self.next_id.fetch_add(1, Ordering::Relaxed);
         let (tx, rx) = oneshot::channel();
         self.pending.lock().await.insert(id, tx);
@@ -91,7 +98,7 @@ impl Rpc {
                 .map_err(|e| format!("Envoi impossible: {e}"))?;
         }
 
-        match tokio::time::timeout(RPC_TIMEOUT, rx).await {
+        match tokio::time::timeout(timeout, rx).await {
             Ok(Ok(res)) => res,
             Ok(Err(_)) => Err("Connexion fermée".to_string()),
             Err(_) => {
@@ -332,18 +339,20 @@ impl Session {
         }
     }
 
-    async fn execute(&self, action: Action) -> RpcResult {
-        match action {
-            Action::Pause => self.rpc.call("printer.print.pause", json!({})).await,
-            Action::Resume => self.rpc.call("printer.print.resume", json!({})).await,
-            Action::Cancel => self.rpc.call("printer.print.cancel", json!({})).await,
-            Action::EmergencyStop => self.rpc.call("printer.emergency_stop", json!({})).await,
-            Action::FirmwareRestart => self.rpc.call("printer.firmware_restart", json!({})).await,
-            Action::Gcode(script) => {
-                self.rpc
-                    .call("printer.gcode.script", json!({ "script": script }))
-                    .await
-            }
+}
+
+/// Run one printer action. Called from its own task so a long-running G-code
+/// never blocks the session loop (status updates, other commands, keepalive).
+async fn execute(rpc: Rpc, action: Action) -> RpcResult {
+    match action {
+        Action::Pause => rpc.call("printer.print.pause", json!({})).await,
+        Action::Resume => rpc.call("printer.print.resume", json!({})).await,
+        Action::Cancel => rpc.call("printer.print.cancel", json!({})).await,
+        Action::EmergencyStop => rpc.call("printer.emergency_stop", json!({})).await,
+        Action::FirmwareRestart => rpc.call("printer.firmware_restart", json!({})).await,
+        Action::Gcode(script) => {
+            rpc.call_with_timeout("printer.gcode.script", json!({ "script": script }), GCODE_TIMEOUT)
+                .await
         }
     }
 }
@@ -453,8 +462,11 @@ async fn session(
                 },
                 cmd = cmd_rx.recv() => match cmd {
                     Some(c) => {
-                        let res = sess.execute(c.action).await;
-                        let _ = c.reply.send(res);
+                        let rpc = sess.rpc.clone();
+                        tokio::spawn(async move {
+                            let res = execute(rpc, c.action).await;
+                            let _ = c.reply.send(res);
+                        });
                     }
                     None => return Ok(()),
                 },
